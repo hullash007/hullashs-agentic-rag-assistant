@@ -218,3 +218,35 @@ __marimo__/
 
 # Streamlit
 .streamlit/secrets.toml
+
+# Project-specific exclusions and environment-template exception
+# Secrets and environment files
+.env
+.env.*
+!.env.example
+
+# Python environments and caches
+.venv/
+venv/
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.coverage
+htmlcov/
+
+# Editors and operating systems
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
+
+# Local databases and persistent data
+*.db
+*.sqlite
+*.sqlite3
+pgdata/
+postgres_data/
+infrastructure/postgres_data/
+
+# Logs
+*.log
