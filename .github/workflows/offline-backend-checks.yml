@@ -1,0 +1,52 @@
+# REVIEW ONLY. Not uploaded, enabled or executed.
+# Execution blocked pending explicit default-branch workflow publication decision.
+name: Offline backend checks
+on: workflow_dispatch
+permissions:
+  contents: read
+concurrency:
+  group: offline-backend-${{ github.ref }}
+  cancel-in-progress: true
+jobs:
+  test:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    env:
+      LLM_PROVIDER: mock
+      GEMINI_API_KEY: ''
+      GEMINI_MODEL: ''
+      GOOGLE_API_KEY: ''
+      LANGCHAIN_TRACING_V2: 'false'
+      LANGSMITH_TRACING: 'false'
+      LANGCHAIN_API_KEY: ''
+      LANGSMITH_API_KEY: ''
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # official v4 tag, verified 2026-11-16
+        with:
+          ref: cd7956034cb66c1a43731897af715856d04e27cb
+          persist-credentials: false
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # official v5 tag, verified 2026-11-16
+        with:
+          python-version: '3.12'
+      - run: |
+          test "$(git rev-parse HEAD)" = cd7956034cb66c1a43731897af715856d04e27cb
+          python -m venv .ci-venv
+          .ci-venv/bin/python -m pip install --require-hashes -r requirements.recovery.lock
+          .ci-venv/bin/python -m pip check
+          .ci-venv/bin/python -m compileall -q apps backend tests
+      - name: Test with pre-import Python socket and DNS guard
+        run: |
+          .ci-venv/bin/python - <<'PY'
+          import os, socket, sys
+          for key in ('GOOGLE_APPLICATION_CREDENTIALS',):
+              os.environ.pop(key, None)
+          def blocked(*args, **kwargs):
+              raise RuntimeError('Outbound network blocked during offline tests')
+          for name in ('connect', 'connect_ex', 'sendto'):
+              setattr(socket.socket, name, blocked)
+          for name in ('create_connection', 'getaddrinfo'):
+              setattr(socket, name, blocked)
+          sys.path.insert(0, os.getcwd())
+          import pytest
+          raise SystemExit(pytest.main(['-q', '-p', 'no:cacheprovider']))
+          PY
