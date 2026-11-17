@@ -13,7 +13,7 @@ from .ingestion_service import (MAX_BYTES, validate_metadata, IngestionRejected,
 from .postgres_repository import DocumentConflict
 
 
-def create_upload_app(*, service, query_service=None):
+def create_upload_app(*, service, query_service=None, answer_service=None):
     if service is None:
         raise ValueError('explicit ingestion service required')
     app = FastAPI(docs_url=None, redoc_url=None, openapi_url=None)
@@ -47,6 +47,36 @@ def create_upload_app(*, service, query_service=None):
             return JSONResponse({'error': 'query_disconnected'}, status_code=400, headers={'Connection': 'close'})
         except Exception:
             return JSONResponse({'error': 'query_failed'}, status_code=500)
+
+    @app.post('/answer')
+    async def answer(request: Request):
+        if answer_service is None:
+            return JSONResponse({'error':'answer_not_configured'}, status_code=503, headers={'Connection':'close'})
+        from .answer_boundary import InvalidAnswerInput, ModelInvocationFailure, InvalidModelOutput
+        data=bytearray()
+        try:
+            async with asyncio.timeout(10):
+                async for piece in request.stream():
+                    if len(data)+len(piece)>12000:
+                        return JSONResponse({'error':'query_too_large'},status_code=413,headers={'Connection':'close'})
+                    data.extend(piece)
+            value=json.loads(data)
+            if type(value) is not dict or set(value)-{'query','top_k'} or 'query' not in value:
+                raise InvalidAnswerInput('invalid_answer_input')
+            result=await run_in_threadpool(answer_service.answer,value['query'],top_k=value.get('top_k',5))
+            return JSONResponse(result)
+        except (InvalidAnswerInput,ValueError,TypeError,UnicodeError):
+            return JSONResponse({'error':'invalid_answer_input'},status_code=422)
+        except ModelInvocationFailure:
+            return JSONResponse({'error':'model_invocation_failure'},status_code=502)
+        except InvalidModelOutput:
+            return JSONResponse({'error':'invalid_model_output'},status_code=502)
+        except TimeoutError:
+            return JSONResponse({'error':'answer_receive_timeout'},status_code=408,headers={'Connection':'close'})
+        except ClientDisconnect:
+            return JSONResponse({'error':'answer_disconnected'},status_code=400,headers={'Connection':'close'})
+        except Exception:
+            return JSONResponse({'error':'answer_failed'},status_code=500)
 
     @app.get('/health')
     async def health():
