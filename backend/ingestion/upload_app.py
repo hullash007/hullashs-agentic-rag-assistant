@@ -1,6 +1,10 @@
 """Opt-in local raw-body upload app. No multipart prebuffering or provider default."""
 import asyncio
 import threading
+import json
+import urllib.parse
+from pathlib import Path
+from fastapi.responses import HTMLResponse
 from fastapi import FastAPI, Request
 from fastapi.responses import JSONResponse
 from starlette.concurrency import run_in_threadpool
@@ -9,11 +13,40 @@ from .ingestion_service import (MAX_BYTES, validate_metadata, IngestionRejected,
 from .postgres_repository import DocumentConflict
 
 
-def create_upload_app(*, service):
+def create_upload_app(*, service, query_service=None):
     if service is None:
         raise ValueError('explicit ingestion service required')
     app = FastAPI(docs_url=None, redoc_url=None, openapi_url=None)
     ingress_gate = threading.Lock()
+
+    @app.get('/', response_class=HTMLResponse)
+    async def home():
+        return Path(__file__).with_name('local_ui.html').read_text(encoding='utf-8')
+
+    @app.post('/query')
+    async def query(request: Request):
+        if query_service is None:
+            return JSONResponse({'error': 'query_not_configured'}, status_code=503)
+        data = bytearray()
+        try:
+            async with asyncio.timeout(10):
+                async for piece in request.stream():
+                    if len(data)+len(piece) > 12000:
+                        return JSONResponse({'error': 'query_too_large'}, status_code=413, headers={'Connection': 'close'})
+                    data.extend(piece)
+            value = json.loads(data)
+            if not isinstance(value, dict) or set(value) - {'query', 'top_k'} or 'query' not in value:
+                raise ValueError('invalid query shape')
+            result = await run_in_threadpool(query_service.query, value['query'], top_k=value.get('top_k', 5))
+            return JSONResponse(result)
+        except (ValueError, TypeError, UnicodeError):
+            return JSONResponse({'error': 'invalid_query'}, status_code=422)
+        except TimeoutError:
+            return JSONResponse({'error': 'query_receive_timeout'}, status_code=408, headers={'Connection': 'close'})
+        except ClientDisconnect:
+            return JSONResponse({'error': 'query_disconnected'}, status_code=400, headers={'Connection': 'close'})
+        except Exception:
+            return JSONResponse({'error': 'query_failed'}, status_code=500)
 
     @app.get('/health')
     async def health():
@@ -23,30 +56,35 @@ def create_upload_app(*, service):
     async def upload(request: Request):
         mime = request.headers.get('content-type', '')
         filename = request.headers.get('x-filename', '')
+        if request.headers.get('x-filename-encoding') == 'uri':
+            try:
+                filename = urllib.parse.unquote(filename, encoding='utf-8', errors='strict')
+            except UnicodeError:
+                return JSONResponse({'error': 'invalid_filename_encoding'}, status_code=415, headers={'Connection': 'close'})
         try:
             validate_metadata(filename, mime)
         except IngestionRejected:
-            return JSONResponse({'error': 'unsupported_metadata'}, status_code=415)
+            return JSONResponse({'error': 'unsupported_metadata'}, status_code=415, headers={'Connection': 'close'})
         length = request.headers.get('content-length')
         if length is not None:
             if not length.isascii() or not length.isdigit():
-                return JSONResponse({'error': 'invalid_length'}, status_code=400)
+                return JSONResponse({'error': 'invalid_length'}, status_code=400, headers={'Connection': 'close'})
             if int(length) > MAX_BYTES:
-                return JSONResponse({'error': 'upload_too_large'}, status_code=413)
+                return JSONResponse({'error': 'upload_too_large'}, status_code=413, headers={'Connection': 'close'})
         if not ingress_gate.acquire(blocking=False):
-            return JSONResponse({'error': 'upload_busy'}, status_code=503)
+            return JSONResponse({'error': 'upload_busy'}, status_code=503, headers={'Connection': 'close'})
         try:
             data = bytearray()
             try:
                 async with asyncio.timeout(10):
                     async for piece in request.stream():
                         if len(data) + len(piece) > MAX_BYTES:
-                            return JSONResponse({'error': 'upload_too_large'}, status_code=413)
+                            return JSONResponse({'error': 'upload_too_large'}, status_code=413, headers={'Connection': 'close'})
                         data.extend(piece)
             except TimeoutError:
-                return JSONResponse({'error': 'upload_timeout'}, status_code=408)
+                return JSONResponse({'error': 'upload_timeout'}, status_code=408, headers={'Connection': 'close'})
             except ClientDisconnect:
-                return JSONResponse({'error': 'upload_disconnected'}, status_code=400)
+                return JSONResponse({'error': 'upload_disconnected'}, status_code=400, headers={'Connection': 'close'})
             try:
                 result = await run_in_threadpool(service.ingest_document, bytes(data),
                                                  filename=filename, content_type=mime)
@@ -56,7 +94,7 @@ def create_upload_app(*, service):
             except IngestionRejected:
                 return JSONResponse({'error': 'document_rejected'}, status_code=422)
             except IngestionBusy:
-                return JSONResponse({'error': 'upload_busy'}, status_code=503)
+                return JSONResponse({'error': 'upload_busy'}, status_code=503, headers={'Connection': 'close'})
             except Exception:
                 return JSONResponse({'error': 'ingestion_failed'}, status_code=500)
         finally:
