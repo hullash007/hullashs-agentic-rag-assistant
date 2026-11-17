@@ -134,6 +134,8 @@ class IngestionService:
     @staticmethod
     def _result(result, sha):
         return {'document_id': result.document_id, 'source_sha256': sha,
+                'filename': result.document.source.filename,
+                'byte_size': len(result.original_bytes),
                 'extracted_sha256': result.extracted_sha256,
                 'segment_count': len(result.document.segments),
                 'chunk_count': len(result.located_chunks),
