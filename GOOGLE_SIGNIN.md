@@ -1,6 +1,6 @@
 # Google identity and isolated sample workspaces
 
-Development status, 2026-11-17. This file is not proof of a live rollout.
+Development status, 2026-11-17: Google mode is deployed as a sign-in preview with document operations disabled. Real-session and two-account hosted acceptance are incomplete. This file describes the design, not proof of a completed rollout. See [current verification scope](docs/PROJECT_STATUS.md).
 
 ## Scope
 
@@ -28,7 +28,7 @@ Original files, extracted text, citations and vectors persist until operator rem
 
 ## Configuration and rollout
 
-Keep the tested Basic service protected while preparing the replacement. Google mode requires:
+Google mode is already configured for sign-in validation with data operations disabled. Preserve the gate while finishing replacement acceptance. Google mode requires:
 
 - DEMO_AUTH_MODE=google
 - GOOGLE_CLIENT_ID: the dedicated project's web client ID
