@@ -1,4 +1,4 @@
-# Candidate source recipe, NOT built or approved for deployment.
+# Candidate recipe: Render builds succeeded; complete runtime smoke still pending.
 # linux/amd64 manifests verified against registry-1.docker.io on 2026-11-17.
 FROM --platform=linux/amd64 python:3.12.15-slim-bookworm@sha256:57d96f71de145a98e7ceca18ee4ade77bba4103a33a72dfaea026b23625c6bf0 AS app
 COPY requirements.recovery.lock /locks/app.lock
