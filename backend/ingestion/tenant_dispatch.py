@@ -7,6 +7,7 @@ from .ingestion_service import IngestionService
 from .persisted_query import PersistedQueryService
 from .local_startup import SyntheticLocalProvider
 from .upload_app import create_upload_app
+from .document_management import DocumentManagementService
 
 class TenantDispatcher:
     def __init__(self,*,engine,parser):
@@ -25,5 +26,6 @@ class TenantDispatcher:
         repository=PostgresDocumentRepository(self.engine,dimension=3,
             embedding_profile='synthetic-hosted-demo-v1:dimension3',tenant_subject=sub)
         app=create_upload_app(service=IngestionService(parser=self.parser,provider=SyntheticLocalProvider(),repository=repository),
-            query_service=PersistedQueryService(repository=repository,query_provider=SyntheticLocalProvider()))
+            query_service=PersistedQueryService(repository=repository,query_provider=SyntheticLocalProvider()),
+            document_service=DocumentManagementService(repository))
         return await app(scope,receive,send)
