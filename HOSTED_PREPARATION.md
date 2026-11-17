@@ -1,54 +1,48 @@
-# Protected retrieval demo - deployment attempt in progress
+# Hosted prototype: configuration and limits
 
-Status: the owner approved a strictly free Render/Neon deployment attempt with login protection, no payment method or paid upgrade, and nonconfidential samples only. Separate free resources and the isolated synthetic schema now exist. Three actual Render image builds completed; the third passed the full credential-free offline final-image smoke. There is no working app link. The deployed command is still offline loopback smoke with no real DB/auth secrets, not the public hosted entrypoint. A source checkpoint is not a working app link. See packaging/BUILD.md for actual failure chronology.
+Status, November 17, 2026: the HTTPS sign-in preview is deployed at https://hullash-rag-demo.onrender.com/. Google mode is configured; document operations remain disabled during real-session and two-account validation. This is not an open upload demo or completed sign-in rollout. Synthetic retrieval and AI answers OFF remain explicit.
 
-## Proposed route
+This page replaces earlier deployment-attempt notes that said no app URL existed. [packaging/BUILD.md](packaging/BUILD.md) preserves the earlier image-smoke history; historical checkpoints are not the current deployment state.
 
-Render Free web service for the FastAPI process and Neon Free Postgres with pgvector. Keep answer generation off. This is an interim retrieval demo with synthetic vectors, not the finished semantic RAG assistant.
+## Hosting model
 
-Current vendor documentation:
+The app process runs on Render and sample records use a separate Neon PostgreSQL/pgvector database. Free hosting can sleep or suspend; the prototype has no uptime/capacity guarantee. Do not assume a free plan permits unlimited use, and do not enable a paid upgrade, attach a card or add paid fallback as part of setup. Check current vendor quotas directly rather than relying on historical numbers in a repository.
 
 - https://render.com/docs/free
-- https://render.com/docs/deploy-fastapi
 - https://neon.com/docs/introduction/plans
 - https://neon.com/docs/extensions/pgvector
 
-Render Free sleeps after 15 minutes of inactivity and can take about a minute to wake. Its filesystem is ephemeral. Monthly bandwidth/build limits can trigger charges if a payment method is attached; without a payment method the documented alternative is suspension/build disabling. The actual Render account was inspected as Hobby/Free with no card on file, no pending charges or invoices, and initial free usage. Do not promise zero cost from the plan name alone. Do not use Render Free Postgres for persistence: it expires after 30 days.
+## Explicit hosted entrypoint
 
-Neon Free currently includes 100 CU-hours per project/month, 1 GB Postgres storage per project and 5 GB public transfer per project/month. These are quotas, not unlimited capacity. pgvector is included on every plan. A separate standalone Free organization/project was created and its actual billing showed $0/month with no card supplied. Existing projects were left untouched.
+`python -m backend.ingestion.hosted_demo` accepts the platform PORT, binds one worker and disables access logs. The container's default command deliberately runs an offline loopback smoke and exits; it is not the hosted service command. Do not expose the unauthenticated local startup or original development `/chat` API instead.
 
-## Entrypoint and protection
+Operator-managed configuration, with secrets supplied outside the repository:
 
-`python -m backend.ingestion.hosted_demo` is separate from the local loopback startup. It accepts the platform `PORT`, binds one process, disables access logs and refuses answer-model enablement. Do not run it as a tunnel or substitute it for the private local startup during development.
+| Setting | Purpose |
+| --- | --- |
+| `DEMO_AUTH_MODE=google` | Google gate, no Basic fallback accepted. |
+| `GOOGLE_CLIENT_ID` | Dedicated web client matching the exact app origin. No client secret is needed for this identity-token flow. |
+| `GOOGLE_AUDIENCE` | Explicit application audience. `any_google` is not evidence that hosted isolation has passed. |
+| `GOOGLE_OPERATIONS_ENABLED=false` | Permit login/status/logout validation while rejecting document actions. Keep false until staged acceptance permits otherwise. |
+| `DEMO_ORIGIN` | Exact HTTPS origin, without path/trailing slash. |
+| `DATABASE_URL` | Secret `postgresql+psycopg` URL with `sslmode=verify-full&sslrootcert=system`. Never log it or use an existing unrelated database. |
+| `RAG_PDF_PYTHON`, `RAG_OFFICE_PYTHON` | Existing absolute paths to the separate pinned parser interpreters. |
+| `ANSWER_GENERATION_ENABLED=false` | Mandatory retrieval-only hosted mode; the factory refuses answer enablement. |
 
-Required operator configuration:
+`GOOGLE_ALLOWED_EMAILS` is used only with allowlist audience mode. A test-user list in Google Cloud is not app authorization. For restricted staged data testing, explicitly use the reviewed app audience policy; do not assume the Cloud list restricts basic identity scopes.
 
-- `DEMO_USERNAME` and a randomly generated `DEMO_PASSWORD` of 32..256 characters, collected through secure secret storage, never chat or source.
-- `DEMO_ORIGIN` set to the exact HTTPS origin of the approved app (no path or trailing slash). Every authenticated mutation must send exactly one matching Origin header. Missing, null, duplicate or foreign Origin is rejected before the app or body is processed. Non-browser clients must deliberately send that exact Origin and credentials. Origin is a browser CSRF defense, not a substitute for authentication.
-- `DATABASE_URL` using `postgresql+psycopg`, explicit database credentials, `sslmode=verify-full&sslrootcert=system`. Do not log the URL. The platform needs an installed system CA bundle. TLS has not yet been tested against a real hosted database.
-- Existing absolute `RAG_PDF_PYTHON` and `RAG_OFFICE_PYTHON` paths to their separately pinned interpreters.
-- `ANSWER_GENERATION_ENABLED=false`.
+Remove retained Basic secrets from live configuration only after the completed replacement validation and rollback decision. Do not print their values. Missing/invalid auth configuration must fail startup rather than open access. See [GOOGLE_SIGNIN.md](GOOGLE_SIGNIN.md) for exact token/session/scoping design.
 
-The ASGI gate authenticates every application route, including the HTML, upload, query, answer and capability routes, before passing the request to the application. Only `GET /healthz` is public and returns a constant status. Authentication uses browser HTTP Basic and must be served exclusively through the host's verified HTTPS URL. It is not multi-user identity management, MFA, per-user authorization, logout/session management, or a general internet-abuse solution. The application does not terminate TLS itself.
+## Storage and request limits
 
-Authenticated requests have a shared 30-per-minute process-local limit; mutating requests share one operation slot. Limits reset on process restart, are not distributed, and do not cap unauthenticated network traffic or all memory use. Use one worker only. A free host may still suspend the service under traffic.
+Uploads are at most 2 MiB. Application quotas are 20 documents / 5 MiB per scoped user and 100 documents / 25 MiB globally. Limits are prototype controls, not vendor quota or denial-of-service guarantees. Rate, session and concurrency state is process-local; use one worker. Original bytes, extracted text, citations and vectors persist in the database until operator removal. No automatic expiry or self-service delete is implemented. Stopping the app does not erase uploads or vendor history/backups.
 
-Responses use no-store, nosniff and frame-denial headers. Parser subprocesses receive a minimal environment without database/auth/model secrets. The parser limits and Python socket stubs are not an OS sandbox; use sample/nonconfidential files only. The prototype has no multi-user corpus isolation. Do not share one demo password with an open audience.
+Only disposable nonconfidential samples are appropriate. Binary parsers have subprocess limits but are not a hostile-file OS sandbox. PDF has no OCR; DOCX supports body paragraphs rather than general table extraction; controlled XLSX has typed row locations and rejects unsupported structures.
 
-## Database and retention
+The data routes are `POST /documents`, `POST /query` and `POST /answer`, with `/capabilities` reporting the configured mode. Negative tests must exercise the real route names, not a nonexistent `/upload` alias. Mutating authenticated requests require exact Origin and the Google session CSRF header. Public health is `GET /healthz`; health does not prove authenticated upload/query or external model readiness.
 
-The hosted factory does not create an account, project, database, extension or schema. Separately approved provisioning must enable pgvector, establish the version/three-dimensional synthetic profile, and create the existing repository tables deliberately. Do not repoint it at an existing non-demo database. The application stores original file bytes, extracted document text/metadata, source fingerprints, located chunks/citations and synthetic vectors in PostgreSQL. Successful ingestion commits those records together. Temporary parser files are removed after parsing; that does not delete the database records. There is no automatic expiry, per-user corpus separation or self-service delete route in this prototype. Restarting/stopping Render does not delete Neon records. Use only disposable nonconfidential samples.
+## Remaining hosted acceptance
 
-Before any sample upload, agree on its removal and verify a supported cleanup route in this isolated database. A scoped removal should delete only that sample's rag_documents row, with foreign-key cascades removing its located chunks and embeddings, then verify absence. Do not promise immediate deletion from vendor history/backups or account retention without current vendor evidence. No production/user files are approved.
+Real Google sessions and two-account dummy isolation are incomplete. Do not call the prototype fully multi-user validated because local subject-scoping tests passed. Keep legacy shared records excluded and never guess their owners. Do not widen access, enable inference, migrate vectors or connect compute as a side effect of UI/deployment work.
 
-The real upload route is POST /documents, not /upload. Deployed negative-auth and missing/null/foreign/duplicate Origin checks must cover /documents explicitly, plus /query and /answer. The offline smoke's five unauthenticated checks included /upload, a nonexistent protected path; that does not independently test the upload handler. Once authenticated, uploads reach /documents only with the exact HTTPS Origin. Keep answer generation OFF and verify /capabilities reports synthetic_not_semantic.
-
-No Gemini key is needed for this demo. The live answer adapter and its UI exist separately, but no successful Gemini answer has been established; no additional live-model attempt is authorized.
-
-## Packaging and evidence
-
-The unchanged application lock contains 63 exact hash-checked packages and uses the approved replacement Python 3.12.15, not the unavailable original 3.12.16. The PDF environment uses Python 3.10 with pypdf 7.1.0 and typing_extensions 4.16.0. The Office environment uses Python 3.12.15 with the six documented exact parser package versions. Regenerated parser lockfiles reproduce those versions, not a claim of parity with lost prior lock hashes.
-
-Fresh local installation succeeded for all three environments. Actual PDF/DOCX/XLSX parser-child smoke tests succeeded with typed locations and reaped children. App environment disk size and idle module-import RSS measurements are not container size, peak concurrency memory, cold-start time, or proof of fit on Render Free. Three Render image builds have now completed on the permitted free builder. The first failed final-image PDF pip check on libexpat; the reviewed fix passed all three final-image dependency checks but failed health readiness. That second run had only code-order inference for parsers. The third diagnostic image explicitly logged all three parser successes and passed health200/five401/listener cleanup, image_default_paths=true. It still exited by design rather than start a public hosted service. See packaging/BUILD.md.
-
-Remaining before reporting a working app: inspect image/runtime resource use, finish secure DB/auth configuration without secrets in SQL history or logs, verify external DB TLS, test HTTPS/private authentication and negative authorization paths on the intended platform, and inspect the actual app URL. The app must remain retrieval-only with model generation off. No URL should be invented in advance.
+Any future model integration must separately qualify protected transport, scoped credentials, token/profile identity, whole-operation budgets, atomic persistence and privacy copy. Every indexed text chunk would leave the app for embeddings; selected evidence and questions would leave for answers. None of that is active in this hosted version.
