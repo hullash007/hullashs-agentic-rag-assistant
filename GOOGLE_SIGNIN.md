@@ -1,6 +1,6 @@
 # Google identity and isolated sample workspaces
 
-Development status, 2026-11-17: Google mode is deployed as a sign-in preview with document operations disabled. Real-session and two-account hosted acceptance are incomplete. This file describes the design, not proof of a completed rollout. See [current verification scope](docs/PROJECT_STATUS.md).
+Development status, 2026-11-17: Google mode has genuine two-account session/logout evidence and independently reviewed bounded fabricated-fixture separation. Document operations were restored to disabled after the restricted test. The exact two-tester application allowlist remains; this is not a general Google-account rollout. See [current verification scope](docs/PROJECT_STATUS.md).
 
 ## Scope
 
@@ -28,12 +28,12 @@ Original files, extracted text, citations and vectors persist until operator rem
 
 ## Configuration and rollout
 
-Google mode is already configured for sign-in validation with data operations disabled. Preserve the gate while finishing replacement acceptance. Google mode requires:
+Google mode is currently restricted to the two approved testers with data operations disabled. Preserve that gate; the bounded test is not broader-release approval. Google mode requires:
 
 - DEMO_AUTH_MODE=google
 - GOOGLE_CLIENT_ID: the dedicated project's web client ID
-- GOOGLE_AUDIENCE=any_google for the approved audience
-- GOOGLE_OPERATIONS_ENABLED=false for real Google sign-in validation with all data routes disabled; set true only after that validation passes
+- GOOGLE_AUDIENCE=allowlist for the current restricted stage; GOOGLE_ALLOWED_EMAILS contains only the two approved testers, managed outside this repository. any_google is a separate rollout configuration, not the current state
+- GOOGLE_OPERATIONS_ENABLED=false in the restored current state; any later enablement requires a coordinated rollout decision, not merely a successful login
 - DEMO_ORIGIN: exact HTTPS origin without trailing slash/path
 - Existing verified-TLS database URL and parser paths
 - ANSWER_GENERATION_ENABLED=false
