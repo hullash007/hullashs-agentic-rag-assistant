@@ -1,6 +1,6 @@
 # Local document workspace
 
-This development branch contains opt-in ingestion, PostgreSQL persistence, a real compiled retrieval graph, and a small local upload/query interface. It is not a hosted assistant or completed milestone. The original application entrypoint is unchanged.
+This development branch contains opt-in ingestion, PostgreSQL persistence, a compiled retrieval graph, and a local upload/query interface. A separate hosted Google sign-in preview exists, but real two-account hosted acceptance is unfinished and hosted document actions remain disabled. This file describes the unauthenticated loopback development path only. The original application entrypoint is unchanged. See [current status](docs/PROJECT_STATUS.md).
 
 ## What works locally
 
@@ -63,7 +63,7 @@ Actual integration evidence includes23HTTP/application tests, a separate non-tes
 
 Normal startup leaves `ANSWER_GENERATION_ENABLED=false`: no answer client is built, no answer key is read, and the answer endpoint returns 503. Upload and retrieval remain available. `/capabilities` tells the interface whether the separate Generate answer action is enabled.
 
-An operator can deliberately enable the real Gemini answer adapter with `ANSWER_GENERATION_ENABLED=true`, `ANSWER_PROVIDER=gemini`, `ANSWER_MODEL`, and `ANSWER_API_KEY`. Missing or invalid settings stop startup rather than falling back to a mock. Optional `ANSWER_TIMEOUT_MS` is 1000..60000 (default15000), and `ANSWER_MAX_OUTPUT_TOKENS` is 1..1024 (default1024). Never commit a real key or paste it into logs. Enabling the provider is an operator action with provider usage, quota, privacy and possible billing consequences, not a free-use guarantee. No automatic model call happens at startup; only the separate answer action requests generation.
+Do not set `ANSWER_GENERATION_ENABLED=true` for the current hosted prototype. A separate opt-in local path supports the real Gemini adapter through `ANSWER_PROVIDER=gemini`, `ANSWER_MODEL`, and `ANSWER_API_KEY`; those settings describe code capability, not a live-service approval or free-use guarantee. Missing or invalid settings stop startup rather than falling back to a mock. Optional `ANSWER_TIMEOUT_MS` is 1000..60000 (default15000), and `ANSWER_MAX_OUTPUT_TOKENS` is 1..1024 (default1024). Never commit a real key or paste it into logs. Enabling the provider is an operator action with provider usage, quota, privacy and possible billing consequences, not a free-use guarantee. No automatic model call happens at startup; only the separate answer action requests generation.
 
 The answer path uses the existing persisted retrieval graph and server-resolved citations. The retrieval vectors are still synthetic and not meaning-based. Citation integrity does not verify factual support or prose/claim consistency. A successful real Gemini answer has not been established. Offline SDK doubles and UI fixtures are not live-model evidence.
 
