@@ -12,6 +12,7 @@
 !backend/ingestion/demo_auth.py
 !backend/ingestion/google_auth.py
 !backend/ingestion/tenant_dispatch.py
+!backend/ingestion/document_management.py
 !backend/ingestion/login_ui.html
 !backend/ingestion/hosted_ui.html
 !backend/ingestion/privacy.html
