@@ -4,6 +4,7 @@ from contextlib import asynccontextmanager
 from sqlalchemy import create_engine
 from sqlalchemy.engine import make_url
 from .demo_auth import PrivateDemoGate
+from .google_auth import GoogleDemoGate
 from .local_startup import SyntheticLocalProvider
 from .postgres_repository import PostgresDocumentRepository
 from .ingestion_service import BoundedParser,IngestionService
@@ -22,7 +23,17 @@ def make_hosted_demo(settings):
     parts=urlsplit(origin)
     if parts.scheme!='https' or not parts.hostname or parts.username or parts.password or parts.path or parts.query or parts.fragment:
         raise ValueError('explicit HTTPS demo origin without path required')
-    gate=PrivateDemoGate(None,username=username,password=password,allowed_origin=origin)
+    mode=settings.get('DEMO_AUTH_MODE','basic')
+    if mode=='google':
+        if settings.get('GOOGLE_OPERATIONS_ENABLED','false') not in ('true','false'):raise ValueError('explicit operation state required')
+        gate=GoogleDemoGate(None,client_id=settings.get('GOOGLE_CLIENT_ID',''),
+            allowed_emails=settings.get('GOOGLE_ALLOWED_EMAILS','').split(','),allowed_origin=origin,
+            audience=settings.get('GOOGLE_AUDIENCE','allowlist'),
+            operations_enabled=settings.get('GOOGLE_OPERATIONS_ENABLED','false')=='true')
+    elif mode=='basic':
+        gate=PrivateDemoGate(None,username=username,password=password,allowed_origin=origin)
+    else:
+        raise ValueError('explicit supported authentication mode required')
     try:
         url=make_url(settings['DATABASE_URL'])
         if url.drivername!='postgresql+psycopg' or not url.host or not url.database or not url.username or not url.password:
@@ -35,6 +46,10 @@ def make_hosted_demo(settings):
         parser=BoundedParser(pdf_python=settings['RAG_PDF_PYTHON'],office_python=settings['RAG_OFFICE_PYTHON'])
         engine=create_engine(url,pool_size=2,max_overflow=0,pool_timeout=5,
             connect_args={'connect_timeout':5,'options':'-c statement_timeout=5000 -c lock_timeout=2000'})
+        if mode=='google':
+            from .tenant_dispatch import TenantDispatcher
+            gate.app=TenantDispatcher(engine=engine,parser=parser)
+            return gate
         repository=PostgresDocumentRepository(engine,dimension=3,embedding_profile='synthetic-hosted-demo-v1:dimension3')
         # Deliberately no automatic DDL. Provisioning belongs to separately approved setup.
         app=create_upload_app(service=IngestionService(parser=parser,provider=SyntheticLocalProvider(),repository=repository),
