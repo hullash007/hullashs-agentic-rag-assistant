@@ -1,0 +1,63 @@
+--- original/routing_candidate.py
++++ review-fix/routing_candidate.py
+@@ -147,12 +147,22 @@
+             self.db.execute('INSERT INTO routes VALUES(?,?,?,?)', (bound.tenant,manifest.namespace,1,0))
+ 
+     def _route(self, tenant):
+-        row = self.db.execute('SELECT r.epoch,n.manifest FROM routes r JOIN namespaces n ON n.tenant=r.tenant AND n.name=r.name WHERE r.tenant=?', (tenant,)).fetchone()
++        row = self.db.execute('SELECT r.epoch,r.name,n.manifest,n.state,n.name FROM routes r LEFT JOIN namespaces n ON n.tenant=r.tenant AND n.name=r.name WHERE r.tenant=?', (tenant,)).fetchone()
+         if not row:
+             raise Refused('scope_missing')
+-        manifest = Manifest(**json.loads(row[1]))
+-        manifest.validate()
+-        return Route(tenant, row[0], manifest)
++        epoch, route_name, raw_manifest, state, row_name = row
++        if type(epoch) is not int or epoch <= 0:
++            raise Refused('invalid_home_epoch')
++        if type(route_name) is not str or not route_name or row_name != route_name or state != 'ACTIVE':
++            raise Refused('invalid_home_namespace_state')
++        try:
++            manifest = Manifest(**json.loads(raw_manifest))
++            manifest.validate()
++        except (TypeError, ValueError):
++            raise Refused('invalid_home_manifest') from None
++        if manifest.namespace != row_name:
++            raise Refused('invalid_home_manifest_namespace')
++        return Route(tenant, epoch, manifest)
+ 
+     def route(self, tenant):
+         with self.tx():
+--- original/test_routing_candidate.py
++++ review-fix/test_routing_candidate.py
+@@ -155,6 +155,31 @@
+         self.ready();self.a.switch(self.a.route(),'semantic768')
+         self.assertEqual(b_rows,self.b.search(self.b.route(),V3))
+         self.assertEqual(self.count('documents','synthetic3'),1)
++    def test_home_building_or_ready_rejected_before_read(self):
++        self.seed()
++        for state in ('BUILDING','READY'):
++            self.h.db.execute('UPDATE namespaces SET state=? WHERE tenant=? AND name=?',(state,self.a.tenant,'synthetic3'))
++            with self.assertRaisesRegex(Refused,'invalid_home_namespace_state'):self.a.route()
++        self.h.db.execute("UPDATE namespaces SET state='ACTIVE' WHERE tenant=? AND name=?",(self.a.tenant,'synthetic3'))
++    def test_home_manifest_namespace_mismatch_rejected(self):
++        old=self.a.route()
++        bad=dataclasses.replace(self.s,namespace='absent')
++        self.h.db.execute('UPDATE namespaces SET manifest=? WHERE tenant=? AND name=?',(json.dumps(bad.__dict__),self.a.tenant,'synthetic3'))
++        with self.assertRaisesRegex(Refused,'invalid_home_manifest_namespace'):self.a.route()
++        # A constructed expected tuple must not turn absent namespace into [] hits.
++        forged=dataclasses.replace(old,manifest=bad)
++        with self.assertRaisesRegex(Refused,'invalid_home_manifest_namespace'):self.a.search(forged,V3)
++    def test_home_epoch_strict_positive_integer_rejected(self):
++        for epoch in (0,-1,1.5,'not-an-integer'):
++            self.h.db.execute('UPDATE routes SET epoch=? WHERE tenant=?',(epoch,self.a.tenant))
++            with self.assertRaisesRegex(Refused,'invalid_home_epoch'):self.a.route()
++        self.h.db.execute('UPDATE routes SET epoch=1 WHERE tenant=?',(self.a.tenant,))
++    def test_home_missing_namespace_row_rejected(self):
++        # Corrupt an own disposable fixture only, explicitly bypass its FK.
++        self.h.db.execute('PRAGMA foreign_keys=OFF')
++        self.h.db.execute('UPDATE routes SET name=? WHERE tenant=?',('absent',self.a.tenant))
++        self.h.db.execute('PRAGMA foreign_keys=ON')
++        with self.assertRaisesRegex(Refused,'invalid_home_namespace_state'):self.a.route()
+     def test_routing_home_survives_local_reconnect(self):
+         self.ready();active=self.a.switch(self.a.route(),'semantic768')
+         self.h.reopen_local_fixture()
