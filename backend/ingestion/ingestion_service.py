@@ -98,7 +98,8 @@ class IngestionService:
         try:
             sha = hashlib.sha256(raw).hexdigest()
             # Server-created identity, never a client path or arbitrary document ID.
-            source = SourceDocument('sha256:' + sha, filename, content_type, sha)
+            identity = self.repository.source_id_for_sha(sha) if hasattr(self.repository,'source_id_for_sha') else 'sha256:'+sha
+            source = SourceDocument(identity, filename, content_type, sha)
             extraction_profile = PROFILES[MIMES[content_type]] + ':chars1000-overlap100'
             existing = self.repository.find_document(source.source_id)
             if existing is not None:
