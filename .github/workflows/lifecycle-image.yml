@@ -1,4 +1,4 @@
-# Revision 2: explicit final-image source COPY boundary; qualification logic unchanged.
+# Revision 3: in-page lifecycle confirmation and full server receipt; prior Revision 2: explicit final-image source COPY boundary; qualification logic unchanged.
 name: Isolated lifecycle image qualification
 on:
   push:
