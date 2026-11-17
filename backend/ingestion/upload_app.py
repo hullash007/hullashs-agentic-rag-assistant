@@ -10,7 +10,7 @@ from fastapi.responses import JSONResponse
 from starlette.concurrency import run_in_threadpool
 from starlette.requests import ClientDisconnect
 from .ingestion_service import (MAX_BYTES, validate_metadata, IngestionRejected, IngestionBusy)
-from .postgres_repository import DocumentConflict
+from .postgres_repository import DocumentConflict, DocumentQuota
 
 
 def create_upload_app(*, service, query_service=None, answer_service=None, answer_cleanup=None):
@@ -133,6 +133,8 @@ def create_upload_app(*, service, query_service=None, answer_service=None, answe
                 result = await run_in_threadpool(service.ingest_document, bytes(data),
                                                  filename=filename, content_type=mime)
                 return JSONResponse(result, status_code=200 if result['status'] == 'already_present' else 201)
+            except DocumentQuota:
+                return JSONResponse({'error':'sample_storage_limit_reached'},status_code=507)
             except DocumentConflict:
                 return JSONResponse({'error': 'source_identity_conflict'}, status_code=409)
             except IngestionRejected:
