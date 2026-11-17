@@ -1,0 +1,30 @@
+test_corrupt_profile_fails_on_home_read (test_routing_candidate.RoutingTests) ... ok
+test_cutover_and_truthful_readpaths (test_routing_candidate.RoutingTests) ... ok
+test_cutover_atomic_failure_keeps_old_tuple (test_routing_candidate.RoutingTests) ... ok
+test_empty_snapshot_refused_without_call (test_routing_candidate.RoutingTests) ... ok
+test_fake_staging_preserves_protected_namespace_and_other_tenant (test_routing_candidate.RoutingTests) ... ok
+test_foreign_namespace_cannot_cutover_or_populate (test_routing_candidate.RoutingTests) ... ok
+test_foreign_route_read_write_freeze_refused (test_routing_candidate.RoutingTests) ... ok
+test_frozen_bound_scope (test_routing_candidate.RoutingTests) ... ok
+test_frozen_write_refused (test_routing_candidate.RoutingTests) ... ok
+test_home_authoritative_tuple (test_routing_candidate.RoutingTests) ... ok
+test_index_manifest_change_stales_expected_route (test_routing_candidate.RoutingTests) ... ok
+test_invalid_vector_before_visible_document (test_routing_candidate.RoutingTests) ... ok
+test_later_fake_batch_failure_no_semantic_store (test_routing_candidate.RoutingTests) ... ok
+test_manifest_profile_and_dimension_refuse (test_routing_candidate.RoutingTests) ... ok
+test_populate_atomic_failure_and_retry_local_fixture (test_routing_candidate.RoutingTests) ... ok
+test_populate_fake_raw_contract_no_identity (test_routing_candidate.RoutingTests) ... ok
+test_rollback_blocks_semantic_only_write (test_routing_candidate.RoutingTests) ... ok
+test_rollback_tuple_epoch_and_old_readpath (test_routing_candidate.RoutingTests) ... ok
+test_routing_home_survives_local_reconnect (test_routing_candidate.RoutingTests) ... ok
+test_same_bytes_two_tenants_separate (test_routing_candidate.RoutingTests) ... ok
+test_source_changed_during_fake_exchange_refused (test_routing_candidate.RoutingTests) ... ok
+test_stage_requires_freeze (test_routing_candidate.RoutingTests) ... ok
+test_unfrozen_switch_refused (test_routing_candidate.RoutingTests) ... ok
+test_unready_target_switch_refused (test_routing_candidate.RoutingTests) ... ok
+test_write_document_chunk_atomic_failure (test_routing_candidate.RoutingTests) ... ok
+
+----------------------------------------------------------------------
+Ran 25 tests in 0.175s
+
+OK
