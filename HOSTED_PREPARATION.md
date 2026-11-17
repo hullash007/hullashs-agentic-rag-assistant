@@ -1,6 +1,6 @@
-# Protected retrieval demo - preparation, not deployment approval
+# Protected retrieval demo - deployment attempt in progress
 
-Status: local source only. No hosted URL, account, resource or deployment has been created. Do not run this entrypoint on an internet-facing machine until the owner has approved the protected deployment and its audience/data retention. A source checkpoint is not a working app link.
+Status: the owner approved a strictly free Render/Neon deployment attempt with login protection, no payment method or paid upgrade, and nonconfidential samples only. Separate free resources and the isolated synthetic schema now exist. Two actual Render image builds completed; neither completed the full runtime smoke. There is no working app link. The deployed command is still offline loopback smoke with no real DB/auth secrets, not the public hosted entrypoint. A source checkpoint is not a working app link. See packaging/BUILD.md for actual failure chronology.
 
 ## Proposed route
 
@@ -13,9 +13,9 @@ Current vendor documentation:
 - https://neon.com/docs/introduction/plans
 - https://neon.com/docs/extensions/pgvector
 
-Render Free sleeps after 15 minutes of inactivity and can take about a minute to wake. Its filesystem is ephemeral. Monthly bandwidth/build limits can trigger charges if a payment method is attached; without a payment method the documented alternative is suspension/build disabling. The actual account, plan and billing settings have not been inspected. Do not promise zero cost from the plan name alone. Do not use Render Free Postgres for persistence: it expires after 30 days.
+Render Free sleeps after 15 minutes of inactivity and can take about a minute to wake. Its filesystem is ephemeral. Monthly bandwidth/build limits can trigger charges if a payment method is attached; without a payment method the documented alternative is suspension/build disabling. The actual Render account was inspected as Hobby/Free with no card on file, no pending charges or invoices, and initial free usage. Do not promise zero cost from the plan name alone. Do not use Render Free Postgres for persistence: it expires after 30 days.
 
-Neon Free currently includes 100 CU-hours per project/month, 1 GB Postgres storage per project and 5 GB public transfer per project/month. These are quotas, not unlimited capacity. pgvector is included on every plan. Actual account eligibility and usage remain unverified.
+Neon Free currently includes 100 CU-hours per project/month, 1 GB Postgres storage per project and 5 GB public transfer per project/month. These are quotas, not unlimited capacity. pgvector is included on every plan. A separate standalone Free organization/project was created and its actual billing showed $0/month with no card supplied. Existing projects were left untouched.
 
 ## Entrypoint and protection
 
@@ -39,12 +39,12 @@ Responses use no-store, nosniff and frame-denial headers. Parser subprocesses re
 
 The hosted factory does not create an account, project, database, extension or schema. Separately approved provisioning must enable pgvector, establish the version/three-dimensional synthetic profile, and create the existing repository tables deliberately. Do not repoint it at an existing non-demo database. Confirm deletion/retention and supported cancellation/removal routes before uploading any user data.
 
-No Gemini key is needed for this demo. The live answer adapter and its UI exist separately, but neither an approved deployment nor a successful Gemini answer has been established by that source code.
+No Gemini key is needed for this demo. The live answer adapter and its UI exist separately, but no successful Gemini answer has been established; no additional live-model attempt is authorized.
 
 ## Packaging and evidence
 
 The unchanged application lock contains 63 exact hash-checked packages and uses the approved replacement Python 3.12.15, not the unavailable original 3.12.16. The PDF environment uses Python 3.10 with pypdf 7.1.0 and typing_extensions 4.16.0. The Office environment uses Python 3.12.15 with the six documented exact parser package versions. Regenerated parser lockfiles reproduce those versions, not a claim of parity with lost prior lock hashes.
 
-Fresh local installation succeeded for all three environments. Actual PDF/DOCX/XLSX parser-child smoke tests succeeded with typed locations and reaped children. App environment disk size and idle module-import RSS measurements are not container size, peak concurrency memory, cold-start time, or proof of fit on Render Free. Docker/Podman are unavailable here; no container image has been built or deployed. Do not call packaging verified until the actual image/build and parser runtime are tested on a permitted builder.
+Fresh local installation succeeded for all three environments. Actual PDF/DOCX/XLSX parser-child smoke tests succeeded with typed locations and reaped children. App environment disk size and idle module-import RSS measurements are not container size, peak concurrency memory, cold-start time, or proof of fit on Render Free. Two Render image builds have now completed on the permitted free builder. The first failed final-image PDF pip check on libexpat; the reviewed fix passed all three final-image dependency checks but failed health readiness. Per-parser completion is inferred by code order, not explicit phase logs. Complete packaging/runtime validation is still pending. See packaging/BUILD.md.
 
-Before an owner deployment choice can be executed: verify the exact account's free plan and no-charge behavior, build/package the two interpreter versions without dependency drift, verify image/runtime resource use, test HTTPS/private authentication and negative authorization paths on the intended platform, and inspect the actual app URL after deployment. No URL should be invented in advance.
+Remaining before reporting a working app: complete final-image smoke, inspect image/runtime resource use, finish secure DB/auth configuration without secrets in SQL history or logs, verify external DB TLS, test HTTPS/private authentication and negative authorization paths on the intended platform, and inspect the actual app URL. The app must remain retrieval-only with model generation off. No URL should be invented in advance.
