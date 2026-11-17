@@ -17,7 +17,8 @@ for name in ('connect', 'connect_ex', 'sendto', 'sendall', 'send'):
 for name in ('create_connection', 'getaddrinfo', 'gethostbyname'):
     setattr(socket, name, blocked)
 from dataclasses import asdict
-sys.path[:0] = ['/downloads/rag-offline-prep/source', '/downloads/rag-office-experiment']
+from pathlib import Path
+sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 from backend.ingestion.contracts import SourceDocument
 metadata = json.loads(sys.argv[2])
 source = SourceDocument(**metadata)
@@ -29,10 +30,10 @@ if source.mime_type == 'application/pdf':
     from backend.ingestion.pdf_adapter import parse_pdf_experiment
     document = parse_pdf_experiment(raw, source)
 elif source.mime_type == 'application/vnd.openxmlformats-officedocument.wordprocessingml.document':
-    from office_adapter import docx_extract
+    from backend.ingestion.office_adapter import docx_extract
     document = docx_extract(raw, source)
 elif source.mime_type == 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet':
-    from xlsx_inspected import extract_xlsx
+    from backend.ingestion.xlsx_inspected import extract_xlsx
     document = extract_xlsx(raw, source)
 else:
     raise ValueError('unsupported binary MIME')
