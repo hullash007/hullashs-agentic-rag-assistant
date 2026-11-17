@@ -2,7 +2,7 @@
 
 A source-first document workspace built with FastAPI, LangGraph and PostgreSQL/pgvector. Upload a nonconfidential sample, retrieve passages and inspect their source locations.
 
-**Current scope: a retrieval-pipeline prototype, not a finished semantic RAG assistant.** Retrieval uses synthetic vectors. Hosted AI answers are off. Google sign-in and per-user isolation are implemented, but hosted two-account acceptance is still pending and document actions remain disabled during validation.
+**Current scope: a retrieval-pipeline prototype, not a finished semantic RAG assistant.** Retrieval uses synthetic vectors. Hosted AI answers are off. Genuine hosted Google sign-in/logout and bounded two-account fabricated-document separation have passed focused independent review. Document actions are currently disabled and access remains restricted to two approved testers, not general Google accounts.
 
 [Preview the sign-in page](https://hullash-rag-demo.onrender.com/) · [Architecture and verification](docs/PROJECT_STATUS.md) · [Local setup](LOCAL_DEVELOPMENT.md) · [Google identity design](GOOGLE_SIGNIN.md)
 
@@ -10,16 +10,16 @@ A source-first document workspace built with FastAPI, LangGraph and PostgreSQL/p
 
 - **Document provenance:** bounded TXT, PDF, DOCX and XLSX ingestion with original bytes, extracted text, source hashes and typed document/page/paragraph/sheet-row citations.
 - **A persisted retrieval path:** query embedding seam -> registered retrieval tool -> compiled LangGraph -> PostgreSQL/pgvector -> bounded evidence bundle. Tool selection is explicit, not model-selected.
-- **Identity-aware storage:** Google signed-token verification, server-derived tenant scope, nonce-bound login, opaque sessions, CSRF checks and scoped quotas. Real disposable PostgreSQL tests cover two synthetic subjects and legacy-record exclusion; live two-Google-user acceptance remains open.
+- **Identity-aware storage:** Google signed-token verification, server-derived tenant scope, nonce-bound login, opaque sessions, CSRF checks and scoped quotas. Real disposable PostgreSQL tests cover two synthetic subjects and legacy-record exclusion; two real hosted accounts also passed bounded fabricated-fixture separation checks, not exhaustive security acceptance.
 - **Honest product boundaries:** responsive interface, no generated-answer claims, sample-only retention notice and separate operator-controlled activation gates.
 
 ## Works, verified locally, and still in progress
 
 | Area | Evidence and current limit |
 | --- | --- |
-| Hosted interface | Sign-in page and Google button render on desktop/mobile. Not a completed login or open document demo. |
-| Upload, persistence and citations | Local application/browser tests and disposable PostgreSQL checks. Hosted Google data routes remain disabled. |
-| Per-user scope | Implemented and locally tested, including identical bytes under separate subjects and reverse legacy exclusion. Two real hosted accounts not yet accepted. |
+| Hosted interface | Desktop/mobile sign-in UI plus genuine Google sessions and logout401 for two approved testers. Not an open document demo. |
+| Upload, persistence and citations | Local/disposable PostgreSQL checks plus hosted fabricated TXT upload and reciprocal relogin retrieval. Data routes restored to disabled after testing. |
+| Per-user scope | Implemented and locally tested, including identical bytes under separate subjects and reverse legacy exclusion. Bounded hosted fixture separation independently accepted; direct hosted ownership/foreign-ID audits and exact filename collisions are not proven. |
 | Semantic retrieval | Not enabled. Current vectors exercise plumbing, not meaning-based relevance. |
 | Generated answers | Hosted factory refuses enablement. Provider-neutral schema/validation and an optional local Gemini adapter exist, not a working hosted answer feature. |
 | Private model integration | Separate private embedding qualification exists; no app transport, active semantic profile or index migration. Full-RAG generation quality, capacity and latency remain unresolved. |
