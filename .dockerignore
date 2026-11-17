@@ -10,6 +10,11 @@
 !backend/ingestion/chunking.py
 !backend/ingestion/contracts.py
 !backend/ingestion/demo_auth.py
+!backend/ingestion/google_auth.py
+!backend/ingestion/tenant_dispatch.py
+!backend/ingestion/login_ui.html
+!backend/ingestion/hosted_ui.html
+!backend/ingestion/privacy.html
 !backend/ingestion/embeddings.py
 !backend/ingestion/evidence.py
 !backend/ingestion/gemini_answer.py
