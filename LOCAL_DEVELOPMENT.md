@@ -58,3 +58,13 @@ The UI escapes all document text using textContent, not HTML interpolation.
 - Local startup uses statement/lock/connect/pool timeouts but is not a production resource policy or migration system. Existing schema dimension must match; production embedding dimension is not inferred from dimension3 fixtures.
 
 Actual integration evidence includes23HTTP/application tests, a separate non-test-startup upload/query run, and rendered desktop/mobile UI screenshots. Separate existing165pure/18querygraph/15full-source regressions pass. This does not establish live Gemini generation, semantic relevance, model-selected tools, production safety or hosted availability.
+
+## Optional answer generation (disabled by default)
+
+Normal startup leaves `ANSWER_GENERATION_ENABLED=false`: no answer client is built, no answer key is read, and the answer endpoint returns 503. Upload and retrieval remain available. `/capabilities` tells the interface whether the separate Generate answer action is enabled.
+
+An operator can deliberately enable the real Gemini answer adapter with `ANSWER_GENERATION_ENABLED=true`, `ANSWER_PROVIDER=gemini`, `ANSWER_MODEL`, and `ANSWER_API_KEY`. Missing or invalid settings stop startup rather than falling back to a mock. Optional `ANSWER_TIMEOUT_MS` is 1000..60000 (default15000), and `ANSWER_MAX_OUTPUT_TOKENS` is 1..1024 (default1024). Never commit a real key or paste it into logs. Enabling the provider is an operator action with provider usage, quota, privacy and possible billing consequences, not a free-use guarantee. No automatic model call happens at startup; only the separate answer action requests generation.
+
+The answer path uses the existing persisted retrieval graph and server-resolved citations. The retrieval vectors are still synthetic and not meaning-based. Citation integrity does not verify factual support or prose/claim consistency. A successful real Gemini answer has not been established. Offline SDK doubles and UI fixtures are not live-model evidence.
+
+The application closes clients it creates at shutdown; an explicitly injected external client remains its caller's responsibility. SDK timeout/retry settings do not establish an independent whole-application deadline. The previous 15-second probe returned504 and the separately approved 60-second diagnostic returned503 before its deadline; the cause remains unknown. Neither response proves key validity or invalidity.
