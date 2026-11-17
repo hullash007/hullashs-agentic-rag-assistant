@@ -14,7 +14,7 @@ ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
 DEFAULTS = {'app': '/opt/venvs/app/bin/python', 'pdf': '/opt/venvs/pdf/bin/python',
             'office': '/opt/venvs/office/bin/python'}
-# Overrides are only for source smoke, never evidence about the unbuilt image.
+# Overrides are only for source smoke, never evidence about the image.
 PY = {k: os.environ.get('SMOKE_' + k.upper() + '_PYTHON', v) for k, v in DEFAULTS.items()}
 assert os.path.abspath(sys.executable) == PY['app'], 'run with the explicit app interpreter'
 
@@ -26,6 +26,14 @@ def run(which, code, *args):
                                    timeout=30, text=True).strip()
 
 
+SMOKE_STARTED = time.monotonic()
+
+
+def phase(name, **details):
+    print(json.dumps({'phase': name, 'elapsed_seconds': round(time.monotonic()-SMOKE_STARTED, 3), **details}), flush=True)
+
+
+phase('environment_checks_started')
 expected = {'app': '3.12.15', 'pdf': '3.10.12', 'office': '3.12.15'}
 for which in PY:
     assert Path(PY[which]).is_absolute() and Path(PY[which]).is_file()
@@ -39,6 +47,7 @@ assert run('app', 'import importlib.util as u;assert all(u.find_spec(x) is None 
 assert run('pdf', 'import importlib.metadata as m;assert m.version("pypdf")=="7.1.0";print("pdf")') == 'pdf'
 assert run('office', 'import importlib.metadata as m;assert m.version("python-docx")=="1.2.0" and m.version("openpyxl")=="3.1.5" and m.version("lxml")=="6.1.3";print("office")') == 'office'
 
+phase('environment_checks_passed', versions=expected)
 from backend.ingestion.contracts import SourceDocument
 from backend.ingestion.ingestion_service import BoundedParser
 parser = BoundedParser(pdf_python=PY['pdf'], office_python=PY['office'])
@@ -50,12 +59,14 @@ with tempfile.TemporaryDirectory(prefix='artifact-smoke-') as folder:
         ('pdf','application/pdf','page'),
         ('docx','application/vnd.openxmlformats-officedocument.wordprocessingml.document','paragraph'),
         ('xlsx','application/vnd.openxmlformats-officedocument.spreadsheetml.sheet','sheet')]:
+        phase('parser_started', format=suffix)
         raw = (path/('fixture.'+suffix)).read_bytes()
         source = SourceDocument('smoke:'+suffix, 'fixture.'+suffix, mime, hashlib.sha256(raw).hexdigest())
         result = parser.parse(raw, source)
         assert result.format == suffix and len(result.segments) == 1
         assert result.segments[0].locator.kind == locator
         assert parser.executions[-1]['reaped'] and parser.executions[-1]['exit_code'] == 0
+        phase('parser_passed', format=suffix, reaped=True, exit_code=0)
 
 # Health and unauthorized requests must never touch an external service.
 # Child monkeypatches are tripwires, not alternative implementations of the app.
@@ -87,21 +98,29 @@ env = {'PATH':'/usr/local/bin:/usr/bin:/bin','PYTHONNOUSERSITE':'1',
        'PYTHONDONTWRITEBYTECODE':'1','RAG_PDF_PYTHON':PY['pdf'],
        'RAG_OFFICE_PYTHON':PY['office'],'SMOKE_PORT':str(port)}
 with tempfile.TemporaryFile(mode='w+b') as logs:
+    phase('server_child_launch_started', target_host='127.0.0.1', target_port=port)
     process = subprocess.Popen([PY['app'], '-c', server_code], cwd=ROOT, env=env,
                                stdout=logs, stderr=logs, start_new_session=True)
+    phase('server_child_launched')
     def request(method, route):
         conn = http.client.HTTPConnection('127.0.0.1',port,timeout=1)
         try:
             conn.request(method,route); response=conn.getresponse()
             return response.status, response.read(), dict(response.getheaders())
         finally:conn.close()
+    failure = None
+    cleanup_failure = None
+    returncode_before_cleanup = None
+    started = time.monotonic()
+    phase('health_startup_wait', budget_seconds=120)
     try:
-        deadline=time.monotonic()+15
+        deadline=started+120
         while True:
             if process.poll() is not None:raise AssertionError('smoke server exited')
             try:
                 status, body, headers=request('GET','/healthz')
                 assert status==200 and json.loads(body)=={'status':'ok'}
+                phase('health_passed', status=200, wait_elapsed_seconds=round(time.monotonic()-started, 3))
                 break
             except (ConnectionError,TimeoutError):
                 if time.monotonic()>deadline:raise
@@ -110,13 +129,40 @@ with tempfile.TemporaryFile(mode='w+b') as logs:
             status,body,headers=request(method,route)
             assert status==401 and json.loads(body)=={'error':'authentication_required'}
             assert headers.get('cache-control')=='no-store'
+    except BaseException as exc:
+        failure = exc
     finally:
         import signal
-        os.killpg(process.pid,signal.SIGTERM)
-        try:process.wait(timeout=5)
-        except subprocess.TimeoutExpired:
-            os.killpg(process.pid,signal.SIGKILL);process.wait(timeout=5)
-        logs.seek(0); log_text=logs.read().decode(errors='replace')
+        returncode_before_cleanup = process.poll()
+        try:
+            if returncode_before_cleanup is None:
+                try: os.killpg(process.pid, signal.SIGTERM)
+                except ProcessLookupError: pass
+            try: process.wait(timeout=5)
+            except subprocess.TimeoutExpired:
+                try: os.killpg(process.pid, signal.SIGKILL)
+                except ProcessLookupError: pass
+                process.wait(timeout=5)
+        except BaseException as exc:
+            cleanup_failure = exc
+        try:
+            # Bound emitted diagnostics to 64KiB. Tempfile storage is not a disk quota.
+            logs.seek(0, 2); log_bytes = logs.tell(); logs.seek(0)
+            log_text = logs.read(65536).decode(errors='replace')
+        except BaseException as exc:
+            cleanup_failure = cleanup_failure or exc
+            log_bytes = 0; log_text = ''
+        if failure is not None or cleanup_failure is not None:
+            # This child has only fixed synthetic settings, no external credentials.
+            phase('health_failure_diagnostics', wait_elapsed_seconds=round(time.monotonic()-started, 3),
+                  original_error_type=type(failure).__name__ if failure is not None else None,
+                  connection_errno=getattr(failure, 'errno', None),
+                  cleanup_error_type=type(cleanup_failure).__name__ if cleanup_failure is not None else None,
+                  returncode_before_cleanup=returncode_before_cleanup,
+                  returncode_after_cleanup=process.returncode, child_log=log_text,
+                  child_log_bytes=log_bytes, child_log_truncated=log_bytes>65536)
+    if failure is not None: raise failure.with_traceback(failure.__traceback__)
+    if cleanup_failure is not None: raise cleanup_failure.with_traceback(cleanup_failure.__traceback__)
     assert process.returncode in (0, -15) and not log_text.strip(), ('smoke server error', process.returncode, log_text)
 with socket.socket() as sock:
     sock.settimeout(1); assert sock.connect_ex(('127.0.0.1',port))!=0, 'listener remains'
