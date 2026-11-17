@@ -1,0 +1,36 @@
+name: Isolated lifecycle image qualification
+on:
+  push:
+    branches: [qualify-lifecycle-image]
+    paths:
+      - '.github/workflows/lifecycle-image.yml'
+permissions: {}
+concurrency:
+  group: lifecycle-image-qualification
+  cancel-in-progress: false
+jobs:
+  image:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    env:
+      CI: 'true'
+      DOCKER_BUILDKIT: '1'
+    steps:
+      - name: Fetch exact public pushed commit without credentials
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$GITHUB_REPOSITORY" = hullash007/hullashs-agentic-rag-assistant
+          test "$GITHUB_REF" = refs/heads/qualify-lifecycle-image
+          mkdir source
+          cd source
+          git init -q
+          git fetch -q --depth=1 https://github.com/hullash007/hullashs-agentic-rag-assistant.git "$GITHUB_SHA"
+          git checkout -q --detach FETCH_HEAD
+          test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
+      - name: Build exact reviewed container and inspect isolated artifact
+        working-directory: source
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 packaging/qualify_lifecycle_image.py
