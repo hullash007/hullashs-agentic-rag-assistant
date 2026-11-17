@@ -211,3 +211,33 @@ def test_delete_removes_all_chunks_not_only_first(env):
     with engine.connect() as c:
         assert all(c.execute(text('select count(*) from '+t)).scalar_one() == 0
             for t in ('rag_documents','rag_located_chunks','rag_chunk_embeddings'))
+
+
+def test_upload_receipt_uses_server_stored_fields(env):
+    import hashlib
+    engine, repo, seed, login, gate = env
+    a, headers = login('A')
+    raw = b'Fabricated receipt sample only.'
+    response = a.post('/documents', content=raw,
+        headers={**headers, 'Content-Type': 'text/plain', 'X-Filename': 'receipt.txt'})
+    assert response.status_code == 201
+    receipt = response.json()
+    assert receipt['status'] == 'stored'
+    assert receipt['filename'] == 'receipt.txt'
+    assert receipt['byte_size'] == len(raw)
+    assert receipt['source_sha256'] == hashlib.sha256(raw).hexdigest()
+    assert len(receipt['document_id']) == 64
+    details = a.get('/documents/' + receipt['document_id']).json()
+    assert details['sha256'] == receipt['source_sha256']
+    assert details['filename'] == receipt['filename']
+    assert details['byte_size'] == receipt['byte_size']
+    duplicate = a.post('/documents', content=raw,
+        headers={**headers, 'Content-Type': 'text/plain', 'X-Filename': 'not-stored-name.txt'})
+    assert duplicate.status_code == 409  # same bytes with conflicting filename, no success receipt
+    duplicate = a.post('/documents', content=raw,
+        headers={**headers, 'Content-Type': 'text/plain', 'X-Filename': 'receipt.txt'})
+    assert duplicate.status_code == 200
+    assert duplicate.json()['status'] == 'already_present'
+    assert duplicate.json()['filename'] == 'receipt.txt'
+    b, _ = login('B')
+    assert b.get('/documents/' + receipt['document_id']).status_code == 404
