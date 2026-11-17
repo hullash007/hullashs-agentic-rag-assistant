@@ -1,6 +1,6 @@
 # Portable packaging candidate
 
-Status: actual Render final-image offline smoke PASSED on 2026-11-17 at checkpoint 648b7f4. This is not a running hosted app or loaded free-host fit proof.
+Historical build record: actual Render final-image offline smoke PASSED on 2026-11-17 at checkpoint 648b7f4. That smoke was not a running hosted app or loaded free-host fit proof. A later Google sign-in preview is now deployed with document operations disabled; see [current hosted status](../HOSTED_PREPARATION.md). The chronology below describes earlier checkpoints, not today's deployment state.
 
 ## Actual build chronology
 
@@ -10,7 +10,7 @@ Status: actual Render final-image offline smoke PASSED on 2026-11-17 at checkpoi
 - Render marked this third deployment failed with "Application exited early" because the safe default smoke command exits. That platform status is expected for an offline smoke and is not a public-service readiness test. Real DB/auth settings and hosted startup remain absent.
 - The diagnostic source includes elapsed pre/post phase logs and bounded (64KiB emitted) child-log output on failure after cleanup, preserving the original failure. Capture uses a temporary file, not a disk quota. This log output is safe only for the fixed credential-free smoke environment, never as generic logging for a real application.
 
-The owner approved a strictly free, no-payment-method, login-protected Render/Neon deployment attempt. This is permission to attempt, not runtime proof. Main/source merge remains held.
+This chronology records a strictly free, no-payment-method, login-protected deployment experiment. It does not authorize new deployments, spending, account access or source merges.
 
 ## Build inputs
 
