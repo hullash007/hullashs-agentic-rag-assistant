@@ -101,14 +101,16 @@ class PostgresDocumentRepository:
         if actual != f'vector({self.dimension})':
             raise ValueError('database vector dimension differs from configured dimension')
 
-    def _prepare(self, document, original_bytes, located_chunks, vectors, extraction_profile, embedding_profile):
+    def _prepare(self, document, original_bytes, located_chunks, vectors, extraction_profile, embedding_profile, *, _require_profile=True):
         if not isinstance(document, ExtractedDocument) or not isinstance(original_bytes, bytes):
             raise ValueError('ExtractedDocument and original bytes required')
         if digest(original_bytes) != document.source.sha256:
             raise ValueError('original bytes SHA mismatch')
         if not isinstance(extraction_profile, str) or not extraction_profile.strip():
             raise ValueError('explicit extraction profile required')
-        if embedding_profile != self.embedding_profile:
+        if not isinstance(embedding_profile, str) or not embedding_profile.strip():
+            raise ValueError('explicit embedding profile required')
+        if _require_profile and embedding_profile != self.embedding_profile:
             raise ValueError('embedding profile does not match repository')
         chunks, vectors = tuple(located_chunks), tuple(vectors)
         if len(chunks) != len(vectors):
@@ -205,9 +207,16 @@ class PostgresDocumentRepository:
         located = tuple(self._located(r, document.source) for r in rows)
         vectors = tuple(tuple(float(x) for x in r['vector']) for r in rows)
         self._prepare(document, bytes(row['original_bytes']), located, vectors,
-                      row['extraction_profile'], row['embedding_profile'])
+                      row['extraction_profile'], row['embedding_profile'], _require_profile=False)
         return StoredDocument(document_id, document, bytes(row['original_bytes']), row['extracted_sha256'],
             row['extraction_profile'], row['embedding_profile'], located, vectors, _already_present)
+
+    def find_document(self, source_id):
+        document_id = digest(canonical(['document-v1', source_id]))
+        with self.engine.connect() as connection:
+            found = connection.execute(select(self.documents.c.document_id).where(
+                self.documents.c.document_id == document_id)).scalar_one_or_none()
+        return None if found is None else self.load_document(found, _already_present=True)
 
     def retrieve(self, query_vector, *, top_k):
         if type(top_k) is not int or top_k <= 0:
