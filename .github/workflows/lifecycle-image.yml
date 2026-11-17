@@ -1,3 +1,4 @@
+# Revision 2: explicit final-image source COPY boundary; qualification logic unchanged.
 name: Isolated lifecycle image qualification
 on:
   push:
