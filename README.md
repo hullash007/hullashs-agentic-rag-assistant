@@ -1,10 +1,36 @@
-# Hullash's agentic rag assistant
+# Hullash's Agentic RAG Assistant
 
-M1 backend foundation: FastAPI with a single-node LangGraph and a mock-first language-model adapter. It does not yet ingest documents, retrieve context, use tools or return citations. Those belong to later milestones.
+A source-first document workspace built with FastAPI, LangGraph and PostgreSQL/pgvector. Upload a nonconfidential sample, retrieve passages and inspect their source locations.
 
-## Run locally
+**Current scope: a retrieval-pipeline prototype, not a finished semantic RAG assistant.** Retrieval uses synthetic vectors. Hosted AI answers are off. Google sign-in and per-user isolation are implemented, but hosted two-account acceptance is still pending and document actions remain disabled during validation.
 
-Use Python 3.12 in a fresh virtual environment:
+[Preview the sign-in page](https://hullash-rag-demo.onrender.com/) · [Architecture and verification](docs/PROJECT_STATUS.md) · [Local setup](LOCAL_DEVELOPMENT.md) · [Google identity design](GOOGLE_SIGNIN.md)
+
+![Hosted desktop sign-in preview, no authenticated workspace](docs/screenshots/hosted-login-desktop.png)
+
+*Actual hosted sign-in page, captured November 17, 2026. The Google button is visible; this screenshot is not proof of a completed Google session. Free hosting may sleep.*
+
+## What this project demonstrates
+
+- **Document provenance:** bounded TXT, PDF, DOCX and XLSX ingestion with original bytes, extracted text, source hashes and typed document/page/paragraph/sheet-row citations.
+- **A persisted retrieval path:** query embedding seam -> registered retrieval tool -> compiled LangGraph -> PostgreSQL/pgvector -> bounded evidence bundle. Tool selection is explicit, not model-selected.
+- **Identity-aware storage:** Google signed-token verification, server-derived tenant scope, nonce-bound login, opaque sessions, CSRF checks and scoped quotas. Real disposable PostgreSQL tests cover two synthetic subjects and legacy-record exclusion; live two-Google-user acceptance remains open.
+- **Honest product boundaries:** responsive interface, no generated-answer claims, sample-only retention notice and separate operator-controlled activation gates.
+
+## Works, verified locally, and still in progress
+
+| Area | Evidence and current limit |
+| --- | --- |
+| Hosted interface | Sign-in page and Google button render on desktop/mobile. Not a completed login or open document demo. |
+| Upload, persistence and citations | Local application/browser tests and disposable PostgreSQL checks. Hosted Google data routes remain disabled. |
+| Per-user scope | Implemented and locally tested, including identical bytes under separate subjects and reverse legacy exclusion. Two real hosted accounts not yet accepted. |
+| Semantic retrieval | Not enabled. Current vectors exercise plumbing, not meaning-based relevance. |
+| Generated answers | Hosted factory refuses enablement. Provider-neutral schema/validation and an optional local Gemini adapter exist, not a working hosted answer feature. |
+| Private model integration | Separate private embedding qualification exists; no app transport, active semantic profile or index migration. Full-RAG generation quality, capacity and latency remain unresolved. |
+
+## Local development
+
+Use Python 3.12 and the hash-pinned application lock. Python 3.12.15 is the tested replacement baseline, not a claim of parity with an earlier unavailable environment.
 
 ```sh
 python -m venv .venv
@@ -14,46 +40,43 @@ python -m pip check
 python -m pytest -v
 ```
 
-The default provider is `mock`. `/health` and tests do not need a Gemini key. To run the development API only on your own machine:
+The default API is mock-first and requires no model key:
 
 ```sh
 python -m uvicorn apps.api.main:app --host 127.0.0.1 --port 8000
 ```
 
-Do not expose `/chat` publicly. Authentication, rate and concurrency limits, provider-client lifecycle management and deployment security review remain predeployment work. No production deployment is included.
+That entrypoint is the original development API, **not the document workspace**. For the upload/query workspace, first prepare the private disposable PostgreSQL/pgvector and separate parser environments described in [LOCAL_DEVELOPMENT.md](LOCAL_DEVELOPMENT.md), then run `python -m backend.ingestion.local_startup`. It binds only to `127.0.0.1:58219` and has no authentication. Never expose it publicly or use confidential files.
 
-## Configuration
+The ordinary pytest run blocks outbound sockets during test execution and skips the explicit disposable-database tests when their socket is not configured. It is not an OS sandbox and does not reproduce all integration checks. See [verification scope](docs/PROJECT_STATUS.md#verification-scope).
 
-`.env.example` contains placeholders only. Copy it to `.env` for reference when configuring environment variables, but the application does not automatically load that file. Export values in your shell or configure them in your process runner. Never commit `.env`, credentials or API keys.
+## Workspace preview
 
-`LLM_PROVIDER=mock` is the safe default. The optional `gemini` provider requires `GEMINI_API_KEY` and `GEMINI_MODEL`. Its default timeout is 15000 milliseconds, output limit 128 tokens, and SDK attempts=1 disables automatic retries. Live Gemini generation has not succeeded in the recorded project smoke checks; offline tests are not live-integration evidence. Do not make additional live requests without the project's current approval.
+![Local workspace with a fabricated sample and test-double identity](docs/screenshots/local-workspace-desktop.png)
 
-## Replacement dependency baseline
+*Local HTTPS browser test with a fabricated sample and test-double identity. It demonstrates layout, upload/query and citation display, not real Google authentication or hosted tenant acceptance.*
 
-`requirements.in` reconstructs the ten direct dependency constraints from the recorded project setup, including the corrected `google-genai>=3.3,<4` constraint. It is not a byte-for-byte recovery of the remote file.
+<details>
+<summary>Hosted mobile sign-in preview</summary>
 
-`requirements.recovery.lock` is a NEW hash-pinned dependency baseline generated on 2026-11-16 using Python 3.12.15, pip 26.3 and pip-tools 7.6.2. Its SHA256 is:
+![Hosted mobile sign-in preview, no authenticated session](docs/screenshots/hosted-login-mobile.png)
 
-```text
-8c5898c4969df3a18d89d1a638620c910b8f5c5c0713b68b2441e8ea6df87d47
-```
+</details>
 
-The original remote lockfile was not recovered. This replacement does not establish original transitive-dependency parity. The original environment used Python 3.12.16. The new baseline contains 63 locked packages; the recorded 64-package environment inventory also includes pip.
+## Data and safety limits
 
-Two independent clean environments installed this replacement with `--require-hashes`, passed `pip check` and compilation, and produced separate results: original Stage6 source 22 tests passed, hardened source in this repository 28 tests passed. The older source snapshot is not included in this delivery tree.
+Use disposable, nonconfidential samples only. Uploads persist in PostgreSQL, including original bytes and extracted text. There is no automatic expiry or self-service delete. Application-level tenant scope is not database row-level security or physical/operator isolation. Parser subprocess restrictions are not a hostile-file OS sandbox.
 
-## Offline test safety
+No paid service, card, subscription upgrade or public inference endpoint is part of this milestone. Current deployment instructions and limits are in [HOSTED_PREPARATION.md](HOSTED_PREPARATION.md). Code and screenshots describe a prototype; they are not security certification, production readiness or uptime guarantees.
 
-`tests/conftest.py` sets mock configuration and applies an autouse socket/DNS-blocking fixture during tests. A pytest fixture starts after collection/imports, so it does not block network activity during module import. It is not an operating-system network sandbox and cannot cover subprocesses or every possible network API. The recorded clean validation used an additional external runner that stripped keys/tracing settings and applied socket/DNS guards before importing pytest and the application. Use an isolated, network-restricted environment for stronger assurance.
+## Repository guide
 
-Safety tests check blocked sockets/DNS and ensure request prompts, exception contents and tracebacks are not written to the application error logs. No real credentials are used in these tests.
-
-## Database validation and remaining gates
-
-A separate disposable local PostgreSQL 16.16 instance with pgvector 0.8.7 returned the actual extension/schema row, vector type, distance calculations and two synthetic inserted/read rows. It used a private Unix socket with TCP disabled, then the database was dropped and the server stopped and removed. This is local extension evidence only. It does not verify application SQLAlchemy integration, Codespaces database compatibility or deployment infrastructure.
-
-Reviewer acceptance, CI execution, private-port configuration review and delivery verification remain separate gates. The original remote-only devcontainer and lockfile are excluded from this tree because they were not recovered and fully scanned. No claim of complete current remote-source byte parity or M1/M2 acceptance is made.
+- `backend/ingestion/`: parsing, chunking, provenance, persistence, retrieval, answer contracts, auth gates and UI.
+- `apps/api/`: original mock-first development API.
+- `tests/`: API/auth/safety tests and opt-in disposable-database tests.
+- `packaging/`: pinned multi-interpreter container recipe and offline smoke.
+- `docs/`: current architecture, verification boundaries and sanitized screenshots.
 
 ## License
 
-MIT. See `LICENSE`.
+MIT. See [LICENSE](LICENSE).
