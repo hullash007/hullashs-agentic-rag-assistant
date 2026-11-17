@@ -1,6 +1,6 @@
 # Local document workspace
 
-This development branch contains opt-in ingestion, PostgreSQL persistence, a compiled retrieval graph, and a local upload/query interface. A separate hosted Google sign-in preview exists, but real two-account hosted acceptance is unfinished and hosted document actions remain disabled. This file describes the unauthenticated loopback development path only. The original application entrypoint is unchanged. See [current status](docs/PROJECT_STATUS.md).
+This development branch contains opt-in ingestion, PostgreSQL persistence, a compiled retrieval graph, and a local upload/query interface. A separate hosted Google workspace has genuine two-account session/logout evidence and independently reviewed bounded fabricated-fixture separation, not exhaustive security acceptance. Hosted document actions are restored OFF and access remains restricted to two approved testers. This file describes the unauthenticated loopback development path only. The original application entrypoint is unchanged. See [current status](docs/PROJECT_STATUS.md).
 
 ## What works locally
 
