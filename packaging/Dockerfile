@@ -25,6 +25,8 @@ COPY --from=office /opt/venvs/office /opt/venvs/office
 WORKDIR /app
 COPY backend /app/backend
 COPY packaging/container_smoke.py /app/packaging/container_smoke.py
+# Verify the ACTUAL final image, after Dockerignore filtering and final COPY.
+RUN /opt/venvs/app/bin/python -c "from pathlib import Path; import backend.ingestion.google_auth, backend.ingestion.tenant_dispatch, backend.ingestion.hosted_demo; p=Path('/app/backend/ingestion'); assert all((p/x).is_file() and (p/x).stat().st_size for x in ('google_auth.py','tenant_dispatch.py','login_ui.html','hosted_ui.html','privacy.html')); print('FINAL_IMAGE_GOOGLE_MODULES_AND_ASSETS_OK')"
 ENV PYTHONDONTWRITEBYTECODE=1 PYTHONNOUSERSITE=1 \
     RAG_PDF_PYTHON=/opt/venvs/pdf/bin/python \
     RAG_OFFICE_PYTHON=/opt/venvs/office/bin/python \
