@@ -1,7 +1,14 @@
 # Portable packaging candidate
 
-Status: SOURCE PREPARATION ONLY. No image built. No deployment or free-host fit claim.
-Keep these files local for review. The reviewed source checkpoint predates them.
+Status: actual Render image builds completed on 2026-11-17, but complete final-image smoke has NOT passed. No usable hosted app or free-host fit claim.
+
+## Actual build chronology
+
+- Checkpoint 5fe161c: three build-stage dependency checks and image export succeeded. Final-image runtime failed at the PDF pip check because pyexpat could not load libexpat.so.1. Parser and HTTP checks did not complete.
+- Reviewed checkpoint ce6d923: copied libexpat.so.1 from the same immutable PDF base into the private PDF prefix, with the existing PDF-only loader scope. Render built and exported it successfully. All three final-image dependency checks passed. Execution reached the HTTP health block after the parser loop, but there were no per-parser phase logs. The health request failed with ConnectionRefusedError at the 15-second readiness deadline and the smoke exited 1. The server child's captured logs were not emitted on that exception, so its underlying startup cause is unknown. Do not infer RAM exhaustion or a missing library.
+- The current diagnostic source adds a bounded 120-second health readiness wait, elapsed pre/post phase logs, and bounded (64KiB emitted) child-log output on failure after cleanup, preserving the original failure. Capture uses a temporary file, not a disk quota. It has not yet been rebuilt or run in the final image. It changes no dependency lock, public binding, app behavior or credential handling.
+
+The owner approved a strictly free, no-payment-method, login-protected Render/Neon deployment attempt. This is permission to attempt, not runtime proof. Main/source merge remains held.
 
 ## Build inputs
 
@@ -22,7 +29,7 @@ Install uses only hash-checked locked binary distributions, no dependency resolu
 
 App and Office share the same complete Python3.12.15 base but separate virtual environments. PDF needs a real second interpreter: copy the complete Python3.10.12 prefix, not merely a venv pointing back at the wrong /usr/local. A PDF-only launcher supplies its libpython loader path. Parser children still use the existing explicit environment settings and minimal child environment.
 
-All stages use Debian bookworm/amd64. This is necessary but NOT sufficient proof of shared-library compatibility across base image dates. The source environments' ELF NEEDED inspection identified libc/libm/libpthread/librt and app wheel dependencies including bundled psycopg libraries, libgcc_s, libz and the dynamic loader; PDF packages are pure Python. It did not establish the final image's complete interpreter extension, ABI, loader or CA bundle compatibility. Actual final-image imports and parser smoke must pass before treating this recipe as buildable. No guessed apt workaround is included.
+All stages use Debian bookworm/amd64. This is necessary but NOT sufficient proof of shared-library compatibility across base image dates. The source environments' ELF NEEDED inspection identified libc/libm/libpthread/librt and app wheel dependencies including bundled psycopg libraries, libgcc_s, libz and the dynamic loader; PDF packages are pure Python. It did not establish the final image's complete interpreter extension, ABI, loader or CA bundle compatibility. Actual final-image imports and complete parser/HTTP smoke must pass before treating this recipe as runtime-validated. No guessed apt workaround is included.
 
 ## Commands for a permitted local builder
 
@@ -33,7 +40,7 @@ docker build --platform=linux/amd64 -f packaging/Dockerfile -t rag-packaging-can
 sh packaging/smoke_image.sh rag-packaging-candidate:local
 ```
 
-Neither command was executed: Docker, Podman and Buildah executables and Docker/Podman sockets are absent. No hosted builder, CI run or account creation was substituted.
+Neither local command was executed. The bounded local-builder route was stopped without changing host isolation. The separately approved Render builder executed the two image builds recorded above.
 
 The wrapper accepts only a prebuilt local image, disables network, publishes no ports, mounts no host files or credentials, uses a read-only filesystem plus a bounded temporary directory, drops capabilities, and caps memory at512MB for a candidate smoke. Even a successful smoke under that cap would not prove loaded/concurrent free-host fit. Build output itself still needs size/library inspection and scanning.
 
@@ -45,10 +52,10 @@ The portable Python smoke ran against the existing local source environments wit
 
 Actual result: exact Python3.12.15/3.10.12/3.12.15; parser package isolation; generated synthetic blank PDF, one-paragraph DOCX and one-cell XLSX; all3actual parser children passed and were reaped; loopback protected hosted factory returned constant health200 and five unauthenticated401 responses; model-constructor/DB-connect tripwires untouched; no provider-key settings lookup; server process group reaped and listener refused after stop. This does not test authenticated database or query execution. Source smoke output explicitly records image_default_paths=false.
 
-Python syntax compilation and shell sh -n passed. No Dockerfile parser/linter is installed, so Dockerfile syntax has only source review, not parser/build verification. The smoke suppresses SyntaxWarning in its server child because SDK3.3.0 contains invalid docstring escapes; other warnings/errors remain visible. Uvicorn shutdown may exit0orSIGTERM(-15); both are explicitly accepted after wait/listener checks, not a claim of application-level graceful shutdown.
+Python syntax compilation and shell sh -n passed. No local Dockerfile parser/linter is installed. Actual Render builds verified the executed Dockerfile revisions; the current diagnostic revision still awaits its own build. The smoke suppresses SyntaxWarning in its server child because SDK3.3.0 contains invalid docstring escapes; other warnings/errors remain visible. Uvicorn shutdown may exit0orSIGTERM(-15); both are explicitly accepted after wait/listener checks, not a claim of application-level graceful shutdown.
 
 The synthetic fixtures are created in a temporary directory and removed; none are bundled as user documents. The final image source copy excludes Git history, local evidence, secrets, uploads and venvs through an allowlist .dockerignore. Verify the actual built image, not just the ignore file.
 
 ## Remaining boundaries
 
-No actual image, free-plan/account/billing verification, real TLS/reverse proxy, hosted schema/retention, deployed auth negatives, live model answer, semantic retrieval or production identity/isolation is established. Invalid authentication remains unthrottled. Do not deploy or call a provider from this packaging task. After source review, actual artifact validation needs a permitted builder rather than another fixture matrix.
+Render Free/Hobby with no card and a separate Neon Free project were verified during the approved attempt. The isolated synthetic-dimension schema was created with pgvector and three repository tables, with no document data. These checks do not establish authenticated external psycopg TLS, real reverse-proxy behavior, retention/deletion follow-through, deployed auth negatives, complete final-image smoke, loaded free-host fit, live model answers, semantic retrieval or production identity/isolation. Invalid authentication remains unthrottled. Actual image context/layers, size/libraries and vulnerability status have not been independently inspected. No model call or wider sharing is authorized by these packaging notes.
