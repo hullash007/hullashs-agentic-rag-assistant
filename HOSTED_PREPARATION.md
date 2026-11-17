@@ -1,6 +1,6 @@
 # Hosted prototype: configuration and limits
 
-Status, November 17, 2026: the HTTPS sign-in preview is deployed at https://hullash-rag-demo.onrender.com/. Google mode is configured; document operations remain disabled during real-session and two-account validation. This is not an open upload demo or completed sign-in rollout. Synthetic retrieval and AI answers OFF remain explicit.
+Status, November 17, 2026: the HTTPS sign-in preview is deployed at https://hullash-rag-demo.onrender.com/. Genuine two-account Google sessions/logout and bounded fabricated-document separation have been independently reviewed. Document operations were restored to disabled and the two-tester application allowlist retained. This is not an open upload demo or general Google-account release. Synthetic retrieval and AI answers OFF remain explicit.
 
 This page replaces earlier deployment-attempt notes that said no app URL existed. [packaging/BUILD.md](packaging/BUILD.md) preserves the earlier image-smoke history; historical checkpoints are not the current deployment state.
 
@@ -22,7 +22,7 @@ Operator-managed configuration, with secrets supplied outside the repository:
 | --- | --- |
 | `DEMO_AUTH_MODE=google` | Google gate, no Basic fallback accepted. |
 | `GOOGLE_CLIENT_ID` | Dedicated web client matching the exact app origin. No client secret is needed for this identity-token flow. |
-| `GOOGLE_AUDIENCE` | Explicit application audience. `any_google` is not evidence that hosted isolation has passed. |
+| `GOOGLE_AUDIENCE` | Current restricted stage uses `allowlist` and only two approved testers. `any_google` is a separate rollout choice, not the current state. |
 | `GOOGLE_OPERATIONS_ENABLED=false` | Permit login/status/logout validation while rejecting document actions. Keep false until staged acceptance permits otherwise. |
 | `DEMO_ORIGIN` | Exact HTTPS origin, without path/trailing slash. |
 | `DATABASE_URL` | Secret `postgresql+psycopg` URL with `sslmode=verify-full&sslrootcert=system`. Never log it or use an existing unrelated database. |
@@ -43,6 +43,6 @@ The data routes are `POST /documents`, `POST /query` and `POST /answer`, with `/
 
 ## Remaining hosted acceptance
 
-Real Google sessions and two-account dummy isolation are incomplete. Do not call the prototype fully multi-user validated because local subject-scoping tests passed. Keep legacy shared records excluded and never guess their owners. Do not widen access, enable inference, migrate vectors or connect compute as a side effect of UI/deployment work.
+Genuine sessions/logout and bounded two-account fabricated TXT separation have passed focused independent review. Each account retained its own unique and shared-byte sample after reciprocal relogin. This does not establish exhaustive multi-user security, exact same-filename collision behavior, direct hosted ownership/foreign-ID checks or legacy-row auditing. Four fabricated documents totaling 536 original bytes remain stored; no deletion or expiry is claimed. Keep legacy shared records excluded and never guess their owners. Do not widen access, enable inference, migrate vectors or connect compute as a side effect of UI/deployment work.
 
 Any future model integration must separately qualify protected transport, scoped credentials, token/profile identity, whole-operation budgets, atomic persistence and privacy copy. Every indexed text chunk would leave the app for embeddings; selected evidence and questions would leave for answers. None of that is active in this hosted version.
