@@ -53,14 +53,21 @@ class DocumentConflict(ValueError):
     pass
 
 
+class DocumentQuota(ValueError):
+    pass
+
+
 class PostgresDocumentRepository:
-    def __init__(self, engine, *, dimension, embedding_profile):
+    def __init__(self, engine, *, dimension, embedding_profile, tenant_subject=None):
         if type(dimension) is not int or not 1 <= dimension <= 16000:
             raise ValueError('explicit fixed vector dimension required')
         if not isinstance(embedding_profile, str) or not embedding_profile.strip():
             raise ValueError('explicit embedding profile required')
         if engine.dialect.name != 'postgresql':
             raise ValueError('PostgreSQL required')
+        if tenant_subject is not None and (not isinstance(tenant_subject,str) or not tenant_subject or len(tenant_subject)>255):
+            raise ValueError('verified tenant subject required')
+        self.source_prefix=('tenant-v1:'+digest(canonical(['google',tenant_subject]))+':') if tenant_subject is not None else ''
         self.engine, self.dimension = engine, dimension
         self.embedding_profile = embedding_profile
         self.metadata = MetaData()
@@ -92,6 +99,25 @@ class PostgresDocumentRepository:
             Column('vector', VECTOR(dimension), nullable=False),
             Column('profile', Text, nullable=False),
             Column('created_at', Text, nullable=False, server_default=func.current_timestamp()))
+
+    def source_id_for_sha(self, sha):
+        if not isinstance(sha,str) or len(sha)!=64 or any(c not in '0123456789abcdef' for c in sha):
+            raise ValueError('valid content hash required')
+        return self.source_prefix+'sha256:'+sha
+
+    def _scope(self):
+        # Empty-prefix legacy scope must never include any present/future tenant records.
+        if not self.source_prefix:
+            return ~self.documents.c.source_id.startswith('tenant-',autoescape=True)
+        return self.documents.c.source_id.startswith(self.source_prefix,autoescape=True)
+
+    def _check_source_scope(self, source_id):
+        if not isinstance(source_id,str):raise ValueError('source identity required')
+        if self.source_prefix:
+            if not source_id.startswith(self.source_prefix+'sha256:'):
+                raise ValueError('source belongs to a different tenant')
+        elif source_id.startswith('tenant-'):
+            raise ValueError('tenant records are not accessible in legacy mode')
 
     def create_schema(self):
         # Extension creation belongs to disposable-database setup, not this service.
@@ -144,19 +170,28 @@ class PostgresDocumentRepository:
 
     def store_document(self, document, original_bytes, located_chunks, vectors, *,
                        extraction_profile, embedding_profile, _checkpoint=None):
+        self._check_source_scope(document.source.source_id)
         chunks, units, payload, fingerprint = self._prepare(document, original_bytes, located_chunks, vectors,
                                                            extraction_profile, embedding_profile)
         document_id = digest(canonical(['document-v1', document.source.source_id]))
         already = False
         try:
             with self.engine.begin() as connection:
+                if self.source_prefix:
+                    # Serialize scoped quota checks and insert in one transaction.
+                    connection.execute(text('SELECT pg_advisory_xact_lock(732514611)'))
                 old = connection.execute(select(self.documents.c.fingerprint).where(
-                    self.documents.c.document_id == document_id)).scalar_one_or_none()
+                    self.documents.c.document_id == document_id, self._scope())).scalar_one_or_none()
                 if old is not None:
                     if old != fingerprint:
                         raise DocumentConflict('source identity already stores different content/profiles/chunks/vectors')
                     already = True
                 else:
+                    if self.source_prefix:
+                        own=connection.execute(select(func.count(),func.coalesce(func.sum(func.octet_length(self.documents.c.original_bytes)),0)).where(self._scope())).one()
+                        total=connection.execute(select(func.count(),func.coalesce(func.sum(func.octet_length(self.documents.c.original_bytes)),0))).one()
+                        if own[0]>=20 or own[1]+len(original_bytes)>5*1024*1024 or total[0]>=100 or total[1]+len(original_bytes)>25*1024*1024:
+                            raise DocumentQuota('sample storage limit reached')
                     connection.execute(insert(self.documents).values(document_id=document_id,
                         source_id=document.source.source_id, source=asdict(document.source),
                         original_bytes=original_bytes, extracted=payload,
@@ -178,7 +213,7 @@ class PostgresDocumentRepository:
             # A concurrent identical ingestion may have committed after our lookup.
             with self.engine.connect() as connection:
                 old = connection.execute(select(self.documents.c.fingerprint).where(
-                    self.documents.c.document_id == document_id)).scalar_one_or_none()
+                    self.documents.c.document_id == document_id, self._scope())).scalar_one_or_none()
             if old != fingerprint:
                 raise DocumentConflict('conflicting concurrent ingestion') from error
             already = True
@@ -193,7 +228,7 @@ class PostgresDocumentRepository:
     def load_document(self, document_id, *, _already_present=False):
         with self.engine.connect() as connection:
             row = connection.execute(select(self.documents).where(
-                self.documents.c.document_id == document_id)).mappings().one()
+                self.documents.c.document_id == document_id, self._scope())).mappings().one()
             document = decode_document(row['source'], row['extracted'])
             if digest(bytes(row['original_bytes'])) != document.source.sha256 or digest(canonical(row['extracted'])) != row['extracted_sha256']:
                 raise ValueError('stored document hash mismatch')
@@ -212,10 +247,11 @@ class PostgresDocumentRepository:
             row['extraction_profile'], row['embedding_profile'], located, vectors, _already_present)
 
     def find_document(self, source_id):
+        self._check_source_scope(source_id)
         document_id = digest(canonical(['document-v1', source_id]))
         with self.engine.connect() as connection:
             found = connection.execute(select(self.documents.c.document_id).where(
-                self.documents.c.document_id == document_id)).scalar_one_or_none()
+                self.documents.c.document_id == document_id, self._scope())).scalar_one_or_none()
         return None if found is None else self.load_document(found, _already_present=True)
 
     def retrieve(self, query_vector, *, top_k):
@@ -224,7 +260,7 @@ class PostgresDocumentRepository:
         query = _unit(query_vector, self.dimension)
         distance = self.embeddings.c.vector.cosine_distance(list(query))
         statement = select(self.chunks, self.documents.c.source, distance.label('distance')).join(
-            self.embeddings).join(self.documents).where(self.embeddings.c.profile == self.embedding_profile).order_by(
+            self.embeddings).join(self.documents).where(self.embeddings.c.profile == self.embedding_profile, self._scope()).order_by(
             distance, self.documents.c.source_id.collate('C'), self.chunks.c.start, self.chunks.c.located_id.collate('C')).limit(top_k)
         with self.engine.connect() as connection:
             rows = connection.execute(statement).mappings().all()
