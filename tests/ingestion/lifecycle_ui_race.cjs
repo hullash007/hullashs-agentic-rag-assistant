@@ -2,7 +2,7 @@
 const fs=require('fs'),vm=require('vm'),assert=require('assert');
 const html=fs.readFileSync(process.argv[2],'utf8');
 const script=html.match(/<script>([\s\S]*?)<\/script>/)[1];
-class El{constructor(){this.children=[];this.textContent='';this.value='question';this.files=[];this.disabled=false;}append(...x){this.children.push(...x)}replaceChildren(...x){this.children=x}}
+class El{constructor(){this.children=[];this.textContent='';this.value='question';this.files=[];this.disabled=false;this.hidden=false;}focus(){}append(...x){this.children.push(...x)}replaceChildren(...x){this.children=x}}
 const doc={document_id:'a'.repeat(64),filename:'fabricated.txt',byte_size:10,chunk_count:1,mime_type:'text/plain'};
 const evidence={evidence:{entries:[{ref:'E1',citation:{source:{filename:doc.filename},start:0,end:10},locator:{kind:'document'},score:1,text:'fabricated deleted text'}]}};
 const tick=()=>new Promise(r=>setImmediate(r));
@@ -27,7 +27,7 @@ async function scenario(mode){
  await get('search').onclick();assert.equal(get('results').children.length,1,'retrieval displayed');
  delay=true;
  const pending=mode==='list'?get('refresh-documents').onclick():get('search').onclick();
- await tick();await row.children[2].children[1].onclick();
+ await tick();await row.children[2].children[1].onclick();await row.children[4].children[1].onclick();
  assert(deleted);assert.equal(get('results').children.length,0);
  assert.equal(get('document-list').children.length,0);
  const status=get('query-status').textContent;
