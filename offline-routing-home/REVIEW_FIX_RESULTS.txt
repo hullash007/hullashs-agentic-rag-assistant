@@ -1,0 +1,9 @@
+test_home_building_or_ready_rejected_before_read (test_routing_candidate.RoutingTests) ... ok
+test_home_manifest_namespace_mismatch_rejected (test_routing_candidate.RoutingTests) ... ok
+test_home_epoch_strict_positive_integer_rejected (test_routing_candidate.RoutingTests) ... ok
+test_home_missing_namespace_row_rejected (test_routing_candidate.RoutingTests) ... ok
+
+----------------------------------------------------------------------
+Ran 4 tests in 0.026s
+
+OK
