@@ -22,6 +22,13 @@ def digest(raw):
 
 manifest = json.loads((ROOT/'packaging/lifecycle-image-source.json').read_text())
 assert manifest['scope'] == 'public_source_only_isolated_build'
+# Reject new tracked source before even contacting Docker. The manifest itself
+# cannot include its own hash; its exact JSON is a separately reviewed delta.
+tracked = set(subprocess.check_output(['git', 'ls-files', '-z'], cwd=ROOT).decode().split('\0')) - {''}
+assert tracked == set(manifest['files']) | {'packaging/lifecycle-image-source.json'}, {
+    'unlisted_tracked': sorted(tracked - set(manifest['files']) - {'packaging/lifecycle-image-source.json'}),
+    'missing_tracked': sorted(set(manifest['files']) - tracked),
+}
 for name, sha in manifest['files'].items():
     assert digest((ROOT/name).read_bytes()) == sha, name
 assert not any((ROOT/n).exists() for n in ('.env', 'credentials.json', 'service-account.json'))
