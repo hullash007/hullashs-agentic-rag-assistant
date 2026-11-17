@@ -51,7 +51,8 @@ phase('environment_checks_passed', versions=expected)
 # The default artifact smoke must inspect packaged assets, not just source imports.
 from backend.ingestion.google_auth import GoogleDemoGate
 from backend.ingestion.tenant_dispatch import TenantDispatcher
-for name in ('google_auth.py','tenant_dispatch.py','login_ui.html','hosted_ui.html','privacy.html'):
+from backend.ingestion.document_management import DocumentManagementService
+for name in ('google_auth.py','tenant_dispatch.py','document_management.py','login_ui.html','hosted_ui.html','privacy.html'):
     assert (ROOT/'backend'/'ingestion'/name).is_file()
 phase('google_packaged_modules_and_assets_passed', image_default_paths=PY==DEFAULTS)
 from backend.ingestion.contracts import SourceDocument
