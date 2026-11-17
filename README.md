@@ -6,7 +6,7 @@ A source-first document workspace built with FastAPI, LangGraph and PostgreSQL/p
 
 [Preview the sign-in page](https://hullash-rag-demo.onrender.com/) · [Architecture and verification](docs/PROJECT_STATUS.md) · [Local setup](LOCAL_DEVELOPMENT.md) · [Google identity design](GOOGLE_SIGNIN.md)
 
-![Hosted desktop sign-in preview, no authenticated workspace](docs/screenshots/hosted-login-desktop.png)
+![Hosted desktop sign-in preview, no authenticated workspace](https://github.com/user-attachments/assets/978c1488-4216-44fd-84f7-e353ae18bc04)
 
 *Actual hosted sign-in page, captured November 17, 2026. The Google button is visible; this screenshot is not proof of a completed Google session. Free hosting may sleep.*
 
@@ -52,14 +52,14 @@ The ordinary pytest run blocks outbound sockets during test execution and skips 
 
 ## Workspace preview
 
-![Local workspace with a fabricated sample and test-double identity](docs/screenshots/local-workspace-desktop.png)
+![Local workspace with a fabricated sample and test-double identity](https://github.com/user-attachments/assets/97f50fe3-e26d-4978-9602-cd4f6878e6bb)
 
 *Local HTTPS browser test with a fabricated sample and test-double identity. It demonstrates layout, upload/query and citation display, not real Google authentication or hosted tenant acceptance.*
 
 <details>
 <summary>Hosted mobile sign-in preview</summary>
 
-![Hosted mobile sign-in preview, no authenticated session](docs/screenshots/hosted-login-mobile.png)
+![Hosted mobile sign-in preview, no authenticated session](https://github.com/user-attachments/assets/40178ef0-826d-4633-b51c-24fde1b44adb)
 
 </details>
 
