@@ -254,6 +254,61 @@ class PostgresDocumentRepository:
                 self.documents.c.document_id == document_id, self._scope())).scalar_one_or_none()
         return None if found is None else self.load_document(found, _already_present=True)
 
+    def _require_lifecycle_scope(self):
+        if not self.source_prefix:
+            raise ValueError('document management requires tenant scope')
+
+    @staticmethod
+    def _summary(row):
+        source = row['source']
+        return {'document_id': row['document_id'], 'filename': source['filename'],
+                'mime_type': source['mime_type'], 'sha256': source['sha256'],
+                'byte_size': row['byte_size'], 'chunk_count': row['chunk_count'],
+                'extraction_profile': row['extraction_profile'],
+                'embedding_profile': row['embedding_profile']}
+
+    def _summary_query(self):
+        return select(self.documents.c.document_id, self.documents.c.source,
+            func.octet_length(self.documents.c.original_bytes).label('byte_size'),
+            self.documents.c.chunk_count, self.documents.c.extraction_profile,
+            self.documents.c.embedding_profile).where(self._scope())
+
+    def list_documents(self):
+        self._require_lifecycle_scope()
+        # A scoped account is quota-bounded to20 records. Never accept caller scope.
+        with self.engine.connect() as connection:
+            rows = connection.execute(self._summary_query().order_by(
+                self.documents.c.document_id)).mappings().all()
+        return [self._summary(row) for row in rows]
+
+    def document_details(self, document_id):
+        self._require_lifecycle_scope()
+        with self.engine.connect() as connection:
+            row = connection.execute(self._summary_query().where(
+                self.documents.c.document_id == document_id)).mappings().one_or_none()
+        return None if row is None else self._summary(row)
+
+    def delete_document(self, document_id, *, _checkpoint=None):
+        self._require_lifecycle_scope()
+        with self.engine.begin() as connection:
+            # Same lock as ingestion: quota/dedup/store and delete cannot interleave.
+            connection.execute(text('SELECT pg_advisory_xact_lock(732514611)'))
+            found = connection.execute(select(self.documents.c.document_id).where(
+                self.documents.c.document_id == document_id, self._scope()).with_for_update()).scalar_one_or_none()
+            if found is None:
+                return False
+            # Explicit ordered child cleanup is atomic even on a pre-existing schema
+            # whose foreign keys do not cascade. The parent predicate is scoped too.
+            owned_chunks = select(self.chunks.c.located_id).where(self.chunks.c.document_id == found)
+            connection.execute(self.embeddings.delete().where(self.embeddings.c.located_id.in_(owned_chunks)))
+            if _checkpoint: _checkpoint('vectors_deleted')
+            connection.execute(self.chunks.delete().where(self.chunks.c.document_id == found))
+            if _checkpoint: _checkpoint('chunks_deleted')
+            connection.execute(self.documents.delete().where(
+                self.documents.c.document_id == found, self._scope()))
+            if _checkpoint: _checkpoint('document_deleted')
+        return True
+
     def retrieve(self, query_vector, *, top_k):
         if type(top_k) is not int or top_k <= 0:
             raise ValueError('positive integer top_k required')
