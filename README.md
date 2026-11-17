@@ -6,10 +6,6 @@ A source-first document workspace built with FastAPI, LangGraph and PostgreSQL/p
 
 [Preview the sign-in page](https://hullash-rag-demo.onrender.com/) · [Architecture and verification](docs/PROJECT_STATUS.md) · [Local setup](LOCAL_DEVELOPMENT.md) · [Google identity design](GOOGLE_SIGNIN.md)
 
-![Hosted desktop sign-in preview, no authenticated workspace](https://github.com/user-attachments/assets/978c1488-4216-44fd-84f7-e353ae18bc04)
-
-*Actual hosted sign-in page, captured November 17, 2026. The Google button is visible; this screenshot is not proof of a completed Google session. Free hosting may sleep.*
-
 ## What this project demonstrates
 
 - **Document provenance:** bounded TXT, PDF, DOCX and XLSX ingestion with original bytes, extracted text, source hashes and typed document/page/paragraph/sheet-row citations.
@@ -50,24 +46,11 @@ That entrypoint is the original development API, **not the document workspace**.
 
 The ordinary pytest run blocks outbound sockets during test execution and skips the explicit disposable-database tests when their socket is not configured. It is not an OS sandbox and does not reproduce all integration checks. See [verification scope](docs/PROJECT_STATUS.md#verification-scope).
 
-## Workspace preview
-
-![Local workspace with a fabricated sample and test-double identity](https://github.com/user-attachments/assets/97f50fe3-e26d-4978-9602-cd4f6878e6bb)
-
-*Local HTTPS browser test with a fabricated sample and test-double identity. It demonstrates layout, upload/query and citation display, not real Google authentication or hosted tenant acceptance.*
-
-<details>
-<summary>Hosted mobile sign-in preview</summary>
-
-![Hosted mobile sign-in preview, no authenticated session](https://github.com/user-attachments/assets/40178ef0-826d-4633-b51c-24fde1b44adb)
-
-</details>
-
 ## Data and safety limits
 
 Use disposable, nonconfidential samples only. Uploads persist in PostgreSQL, including original bytes and extracted text. There is no automatic expiry or self-service delete. Application-level tenant scope is not database row-level security or physical/operator isolation. Parser subprocess restrictions are not a hostile-file OS sandbox.
 
-No paid service, card, subscription upgrade or public inference endpoint is part of this milestone. Current deployment instructions and limits are in [HOSTED_PREPARATION.md](HOSTED_PREPARATION.md). Code and screenshots describe a prototype; they are not security certification, production readiness or uptime guarantees.
+No paid service, card, subscription upgrade or public inference endpoint is part of this milestone. Current deployment instructions and limits are in [HOSTED_PREPARATION.md](HOSTED_PREPARATION.md). This code describes a prototype, not security certification, production readiness or uptime guarantees.
 
 ## Repository guide
 
@@ -75,7 +58,7 @@ No paid service, card, subscription upgrade or public inference endpoint is part
 - `apps/api/`: original mock-first development API.
 - `tests/`: API/auth/safety tests and opt-in disposable-database tests.
 - `packaging/`: pinned multi-interpreter container recipe and offline smoke.
-- `docs/`: current architecture, verification boundaries and sanitized screenshots.
+- `docs/`: current architecture and verification boundaries.
 
 ## License
 
