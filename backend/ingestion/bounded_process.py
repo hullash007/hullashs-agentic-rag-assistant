@@ -5,7 +5,10 @@ import os,selectors,subprocess,time
 def run_child(command, *, wall_seconds=10, pipe_cap=65536):
     start=time.monotonic();deadline=start+wall_seconds
     out={'stdout':bytearray(),'stderr':bytearray()};reason=None;rc=None
-    process=subprocess.Popen(command,stdout=subprocess.PIPE,stderr=subprocess.PIPE)
+    # Parser children receive a minimal environment, never hosting/DB/auth/model secrets.
+    child_env={k:os.environ[k] for k in ('PATH','LANG','LC_ALL','TZ','TMPDIR') if k in os.environ}
+    child_env['PYTHONNOUSERSITE']='1'
+    process=subprocess.Popen(command,stdout=subprocess.PIPE,stderr=subprocess.PIPE,env=child_env)
     selector=None
     try:
         selector=selectors.DefaultSelector()
