@@ -13,10 +13,24 @@ from .ingestion_service import (MAX_BYTES, validate_metadata, IngestionRejected,
 from .postgres_repository import DocumentConflict
 
 
-def create_upload_app(*, service, query_service=None, answer_service=None):
+def create_upload_app(*, service, query_service=None, answer_service=None, answer_cleanup=None):
     if service is None:
         raise ValueError('explicit ingestion service required')
-    app = FastAPI(docs_url=None, redoc_url=None, openapi_url=None)
+    from contextlib import asynccontextmanager
+    @asynccontextmanager
+    async def lifespan(app):
+        try:
+            yield
+        finally:
+            if answer_cleanup is not None:
+                answer_cleanup()
+    app = FastAPI(docs_url=None, redoc_url=None, openapi_url=None, lifespan=lifespan)
+
+    @app.get('/capabilities')
+    async def capabilities():
+        return {'answer_generation_enabled': answer_service is not None,
+                'retrieval_mode': 'synthetic_not_semantic',
+                'answer_provider': 'explicitly_configured' if answer_service is not None else None}
     ingress_gate = threading.Lock()
 
     @app.get('/', response_class=HTMLResponse)
