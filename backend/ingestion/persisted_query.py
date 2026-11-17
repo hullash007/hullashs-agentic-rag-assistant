@@ -32,13 +32,17 @@ class PersistedQueryService:
         self.sdk_tool = make_retrieval_tool(self.retrieval)
         self.executor = GraphToolExecutor(self.sdk_tool)
 
-    def query(self, query, *, top_k=5):
+    def retrieve_message(self, query, *, top_k=5):
         if type(top_k) is not int or not 1 <= top_k <= 10:
             raise ValueError('top_k must be integer 1..10')
         message = query_evidence(query, self.provider, self.sdk_tool,
             expected_dimension=self.repository.dimension, max_query_chars=2000,
             top_k=top_k, max_evidence_items=top_k, max_context_chars=20000,
             call_id='query-' + uuid.uuid4().hex, executor=self.executor)
+        return message
+
+    def query(self, query, *, top_k=5):
+        message = self.retrieve_message(query, top_k=top_k)
         payload = json.loads(message.content) if isinstance(message.content, str) else message.content
         return {'kind': 'retrieval_evidence', 'generated_answer': False,
                 'embedding_profile': self.repository.embedding_profile,
