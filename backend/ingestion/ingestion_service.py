@@ -1,10 +1,12 @@
 """Local ingestion service. Explicit parser, provider and repository injection."""
 from dataclasses import asdict
-import hashlib, json, tempfile, pathlib, importlib.util, threading
+import hashlib, json, tempfile, pathlib, threading
+from .bounded_process import run_child
 from .contracts import SourceDocument
 from .plain_text import ingest_plain_text
 from .segments import ExtractedDocument, ExtractedSegment, SegmentLocator, chunk_segment
 from .embeddings import embed_chunks
+from .postgres_repository import DocumentConflict
 
 MAX_BYTES = 2097152
 MAX_CHUNKS = 128
@@ -38,12 +40,12 @@ def validate_metadata(filename, content_type):
 
 class BoundedParser:
     """Existing parser experiments in their separate, pinned child interpreters."""
-    def __init__(self):
-        spec = importlib.util.spec_from_file_location('rag_bounded_process',
-            '/downloads/rag-pdf-experiment/bounded_process.py')
-        module = importlib.util.module_from_spec(spec)
-        spec.loader.exec_module(module)
-        self.run_child = module.run_child
+    def __init__(self, *, pdf_python, office_python):
+        for path in (pdf_python, office_python):
+            if not isinstance(path, str) or not pathlib.Path(path).is_absolute() or not pathlib.Path(path).is_file():
+                raise ValueError('explicit existing absolute parser interpreter paths required')
+        self.pdf_python, self.office_python = pdf_python, office_python
+        self.run_child = run_child
         self.executions = []
 
     def parse(self, raw, source):
@@ -52,8 +54,7 @@ class BoundedParser:
                                      mime_type=source.mime_type, max_bytes=MAX_BYTES)
             return ExtractedDocument(source, 'plain_text',
                 (ExtractedSegment(0, text.text, SegmentLocator('document')),))
-        executable = ('/downloads/rag-pdf-experiment/venv/bin/python' if source.mime_type == 'application/pdf'
-                      else '/downloads/rag-office-experiment/venv/bin/python')
+        executable = self.pdf_python if source.mime_type == 'application/pdf' else self.office_python
         with tempfile.TemporaryDirectory(prefix='rag-parser-') as directory:
             path = pathlib.Path(directory) / 'input.bin'
             path.write_bytes(raw)
@@ -98,6 +99,14 @@ class IngestionService:
             sha = hashlib.sha256(raw).hexdigest()
             # Server-created identity, never a client path or arbitrary document ID.
             source = SourceDocument('sha256:' + sha, filename, content_type, sha)
+            extraction_profile = PROFILES[MIMES[content_type]] + ':chars1000-overlap100'
+            existing = self.repository.find_document(source.source_id)
+            if existing is not None:
+                if (existing.document.source != source or existing.original_bytes != raw or
+                    existing.extraction_profile != extraction_profile or
+                    existing.embedding_profile != self.repository.embedding_profile):
+                    raise DocumentConflict('source metadata or processing profile conflict')
+                return self._result(existing, sha)
             try:
                 document = self.parser.parse(raw, source)
                 if not isinstance(document, ExtractedDocument) or document.source != source or document.format != MIMES[content_type]:
@@ -115,12 +124,16 @@ class IngestionService:
             except (ValueError, UnicodeError, TypeError) as error:
                 raise IngestionRejected('document ingestion rejected') from error
             result = self.repository.store_document(document, raw, located, vectors,
-                extraction_profile=PROFILES[document.format] + ':chars1000-overlap100',
+                extraction_profile=extraction_profile,
                 embedding_profile=self.repository.embedding_profile)
-            return {'document_id': result.document_id, 'source_sha256': sha,
-                    'extracted_sha256': result.extracted_sha256,
-                    'segment_count': len(result.document.segments),
-                    'chunk_count': len(result.located_chunks),
-                    'status': 'already_present' if result.already_present else 'stored'}
+            return self._result(result, sha)
         finally:
             self.gate.release()
+
+    @staticmethod
+    def _result(result, sha):
+        return {'document_id': result.document_id, 'source_sha256': sha,
+                'extracted_sha256': result.extracted_sha256,
+                'segment_count': len(result.document.segments),
+                'chunk_count': len(result.located_chunks),
+                'status': 'already_present' if result.already_present else 'stored'}
