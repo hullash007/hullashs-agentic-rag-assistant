@@ -13,7 +13,7 @@ from .ingestion_service import (MAX_BYTES, validate_metadata, IngestionRejected,
 from .postgres_repository import DocumentConflict, DocumentQuota
 
 
-def create_upload_app(*, service, query_service=None, answer_service=None, answer_cleanup=None):
+def create_upload_app(*, service, query_service=None, answer_service=None, answer_cleanup=None, document_service=None):
     if service is None:
         raise ValueError('explicit ingestion service required')
     from contextlib import asynccontextmanager
@@ -36,6 +36,60 @@ def create_upload_app(*, service, query_service=None, answer_service=None, answe
     @app.get('/', response_class=HTMLResponse)
     async def home():
         return Path(__file__).with_name('local_ui.html').read_text(encoding='utf-8')
+
+    if document_service is not None:
+        async def lifecycle_input(request):
+            # No caller tenant, JSON body, filter or other selector is accepted.
+            if request.url.query:
+                raise ValueError('query parameters unsupported')
+            async with asyncio.timeout(5):
+                async for piece in request.stream():
+                    if piece:
+                        raise ValueError('request body unsupported')
+
+        @app.get('/documents')
+        async def list_documents(request: Request):
+            try:
+                await lifecycle_input(request)
+                return await run_in_threadpool(document_service.list_documents)
+            except (ValueError, TypeError):
+                return JSONResponse({'error': 'invalid_document_request'}, status_code=422)
+            except (TimeoutError, ClientDisconnect):
+                return JSONResponse({'error': 'invalid_document_request'}, status_code=400)
+            except Exception:
+                return JSONResponse({'error': 'document_operation_failed'}, status_code=500)
+
+        @app.get('/documents/{document_id}')
+        async def document_details(document_id: str, request: Request):
+            try:
+                await lifecycle_input(request)
+                result = await run_in_threadpool(document_service.document_details, document_id)
+                if result is None:
+                    return JSONResponse({'error': 'document_not_found'}, status_code=404)
+                return result
+            except (ValueError, TypeError):
+                return JSONResponse({'error': 'invalid_document_request'}, status_code=422)
+            except (TimeoutError, ClientDisconnect):
+                return JSONResponse({'error': 'invalid_document_request'}, status_code=400)
+            except Exception:
+                return JSONResponse({'error': 'document_operation_failed'}, status_code=500)
+
+        @app.delete('/documents/{document_id}')
+        async def delete_document(document_id: str, request: Request):
+            try:
+                await lifecycle_input(request)
+                deleted = await run_in_threadpool(document_service.delete_document, document_id)
+                if not deleted:
+                    return JSONResponse({'error': 'document_not_found'}, status_code=404)
+                return {'status': 'deleted', 'document_id': document_id,
+                        'deletion_scope': 'application_database_only',
+                        'backup_erasure_guaranteed': False}
+            except (ValueError, TypeError):
+                return JSONResponse({'error': 'invalid_document_request'}, status_code=422)
+            except (TimeoutError, ClientDisconnect):
+                return JSONResponse({'error': 'invalid_document_request'}, status_code=400)
+            except Exception:
+                return JSONResponse({'error': 'document_operation_failed'}, status_code=500)
 
     @app.post('/query')
     async def query(request: Request):
