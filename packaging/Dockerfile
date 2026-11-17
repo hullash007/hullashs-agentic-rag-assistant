@@ -6,7 +6,8 @@ RUN python -m venv /opt/venvs/app && /opt/venvs/app/bin/python -m pip install --
 
 FROM --platform=linux/amd64 python:3.10.12-slim-bookworm@sha256:13cc673c11ee90d6ba92d95f35f4d8e59148937f1e3b4044788e93268bfe9d2e AS pdf
 # A venv alone is NOT a Python distribution. Preserve the full 3.10 prefix too.
-RUN mkdir -p /opt/python310 && cp -a /usr/local/. /opt/python310/
+RUN mkdir -p /opt/python310 && cp -a /usr/local/. /opt/python310/ \
+    && cp -L /usr/lib/x86_64-linux-gnu/libexpat.so.1 /opt/python310/lib/libexpat.so.1
 COPY packaging/requirements.pdf.lock /locks/pdf.lock
 RUN LD_LIBRARY_PATH=/opt/python310/lib /opt/python310/bin/python3.10 -m venv --copies /opt/venvs/pdf && LD_LIBRARY_PATH=/opt/python310/lib /opt/venvs/pdf/bin/python3.10 -m pip install --no-cache-dir --require-hashes --no-deps --only-binary=:all: -r /locks/pdf.lock && LD_LIBRARY_PATH=/opt/python310/lib /opt/venvs/pdf/bin/python3.10 -m pip check
 # Keep the loader path scoped to PDF, not global to app/Office.
