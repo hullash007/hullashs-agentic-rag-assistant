@@ -1,8 +1,9 @@
+# Exact composed OFF candidate qualification; no deployment.
 # Revision 3: in-page lifecycle confirmation and full server receipt; prior Revision 2: explicit final-image source COPY boundary; qualification logic unchanged.
 name: Isolated lifecycle image qualification
 on:
   push:
-    branches: [qualify-lifecycle-image]
+    branches: [qualify-composed-off-20261118]
     paths:
       - '.github/workflows/lifecycle-image.yml'
 permissions: {}
@@ -22,7 +23,7 @@ jobs:
         run: |
           set -euo pipefail
           test "$GITHUB_REPOSITORY" = hullash007/hullashs-agentic-rag-assistant
-          test "$GITHUB_REF" = refs/heads/qualify-lifecycle-image
+          test "$GITHUB_REF" = refs/heads/qualify-composed-off-20261118
           mkdir source
           cd source
           git init -q
