@@ -4,7 +4,7 @@ const html=fs.readFileSync(process.argv[2],'utf8');
 const script=html.match(/<script>([\s\S]*?)<\/script>/)[1];
 class El{constructor(){this.children=[];this.textContent='';this.value='question';this.files=[];this.disabled=false;this.hidden=false;}focus(){}append(...x){this.children.push(...x)}replaceChildren(...x){this.children=x}}
 const doc={document_id:'a'.repeat(64),filename:'fabricated.txt',byte_size:10,chunk_count:1,mime_type:'text/plain'};
-const evidence={evidence:{entries:[{ref:'E1',citation:{source:{filename:doc.filename},start:0,end:10},locator:{kind:'document'},score:1,text:'fabricated deleted text'}]}};
+const evidence={evidence:{entries:[{ref:'E1',citation:{source:{source_id:'fabricated-source',filename:doc.filename,mime_type:doc.mime_type,sha256:'c'.repeat(64)},chunk_id:'fabricated-chunk',start:0,end:23},located_id:'fabricated-located',segment_index:0,locator:{kind:'document'},score:1,text:'fabricated deleted text'}]}};
 const tick=()=>new Promise(r=>setImmediate(r));
 async function scenario(mode){
  const ids={};const get=id=>ids[id]??=new El();let deleted=false,release,delay=false;
@@ -20,7 +20,7 @@ async function scenario(mode){
   }
   throw Error('unexpected route');
  };
- const c={document:{getElementById:get,createElement:()=>new El()},window:{fetch,confirm:()=>true},location:{replace:()=>{}},console};
+ const c={document:{getElementById:get,createElement:()=>new El()},window:{fetch,confirm:()=>true},location:{replace:()=>{}},AbortController,setTimeout,clearTimeout,console};
  vm.createContext(c);vm.runInContext(script,c);await tick();await tick();
  const row=get('document-list').children[0];assert(row,'initial row');
  // First actually display retrieval, not an empty result placeholder.
