@@ -41,8 +41,10 @@ class PersistedQueryService:
             call_id='query-' + uuid.uuid4().hex, executor=self.executor)
         return message
 
-    def query(self, query, *, top_k=5):
+    def query(self, query, *, top_k=5, operation=None):
+        if operation is not None:operation.check()
         message = self.retrieve_message(query, top_k=top_k)
+        if operation is not None:operation.check()
         payload = json.loads(message.content) if isinstance(message.content, str) else message.content
         return {'kind': 'retrieval_evidence', 'generated_answer': False,
                 'embedding_profile': self.repository.embedding_profile,
