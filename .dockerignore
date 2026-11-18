@@ -17,6 +17,7 @@
 !backend/ingestion/hosted_ui.html
 !backend/ingestion/privacy.html
 !backend/ingestion/embeddings.py
+!backend/ingestion/execution_admission.py
 !backend/ingestion/evidence.py
 !backend/ingestion/gemini_answer.py
 !backend/ingestion/graph_executor.py
@@ -34,6 +35,8 @@
 !backend/ingestion/persisted_query.py
 !backend/ingestion/plain_text.py
 !backend/ingestion/postgres_repository.py
+!backend/ingestion/recovery_equivalence.py
+!backend/ingestion/vector_binary.py
 !backend/ingestion/query_boundary.py
 !backend/ingestion/retrieval.py
 !backend/ingestion/routing_graph.py
