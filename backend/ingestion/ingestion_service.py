@@ -89,7 +89,9 @@ class IngestionService:
         self.parser, self.provider, self.repository = parser, provider, repository
         self.gate = threading.Lock()
 
-    def ingest_document(self, raw, *, filename, content_type):
+    def ingest_document(self, raw, *, filename, content_type, operation=None):
+        check=(lambda:None) if operation is None else operation.check
+        check()
         validate_metadata(filename, content_type)
         if not isinstance(raw, bytes) or len(raw) > MAX_BYTES:
             raise IngestionRejected('original byte cap/type')
@@ -101,7 +103,9 @@ class IngestionService:
             identity = self.repository.source_id_for_sha(sha) if hasattr(self.repository,'source_id_for_sha') else 'sha256:'+sha
             source = SourceDocument(identity, filename, content_type, sha)
             extraction_profile = PROFILES[MIMES[content_type]] + ':chars1000-overlap100'
+            check()
             existing = self.repository.find_document(source.source_id)
+            check()
             if existing is not None:
                 if (existing.document.source != source or existing.original_bytes != raw or
                     existing.extraction_profile != extraction_profile or
@@ -109,11 +113,14 @@ class IngestionService:
                     raise DocumentConflict('source metadata or processing profile conflict')
                 return self._result(existing, sha)
             try:
+                check()
                 document = self.parser.parse(raw, source)
+                check()
                 if not isinstance(document, ExtractedDocument) or document.source != source or document.format != MIMES[content_type]:
                     raise ValueError('parser contract mismatch')
                 required = 0
                 for segment in document.segments:
+                    check()
                     if segment.text.strip():
                         length = len(segment.text)
                         required += 1 + max(0, (length-CHUNK_CHARS+CHUNK_CHARS-OVERLAP-1)//(CHUNK_CHARS-OVERLAP))
@@ -121,9 +128,11 @@ class IngestionService:
                         raise IngestionRejected('chunk count exceeds local limit')
                 located = tuple(c for segment in document.segments for c in chunk_segment(
                     segment, source, max_chars=CHUNK_CHARS, overlap=OVERLAP))
+                check()
                 vectors = embed_chunks(tuple(c.chunk for c in located), self.provider)
             except (ValueError, UnicodeError, TypeError) as error:
                 raise IngestionRejected('document ingestion rejected') from error
+            check()
             result = self.repository.store_document(document, raw, located, vectors,
                 extraction_profile=extraction_profile,
                 embedding_profile=self.repository.embedding_profile)
