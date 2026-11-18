@@ -16,6 +16,9 @@ class SyntheticLocalProvider:
     def embed_documents(self, texts):
         return [[1., 0., 0.] for _ in texts]
 
+    def embed_query(self, query):
+        return [1., 0., 0.]
+
 
 def make_local_app(*, socket_directory, database, pdf_python, office_python, answer_provider=None, own_answer_provider=False):
     if not Path(socket_directory).is_absolute() or not Path(socket_directory).is_dir():
