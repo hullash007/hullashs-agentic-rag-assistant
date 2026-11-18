@@ -35,6 +35,7 @@ COPY backend/ingestion/contracts.py /app/backend/ingestion/contracts.py
 COPY backend/ingestion/demo_auth.py /app/backend/ingestion/demo_auth.py
 COPY backend/ingestion/document_management.py /app/backend/ingestion/document_management.py
 COPY backend/ingestion/embeddings.py /app/backend/ingestion/embeddings.py
+COPY backend/ingestion/execution_admission.py /app/backend/ingestion/execution_admission.py
 COPY backend/ingestion/evidence.py /app/backend/ingestion/evidence.py
 COPY backend/ingestion/gemini_answer.py /app/backend/ingestion/gemini_answer.py
 COPY backend/ingestion/google_auth.py /app/backend/ingestion/google_auth.py
@@ -55,6 +56,8 @@ COPY backend/ingestion/persisted_answer.py /app/backend/ingestion/persisted_answ
 COPY backend/ingestion/persisted_query.py /app/backend/ingestion/persisted_query.py
 COPY backend/ingestion/plain_text.py /app/backend/ingestion/plain_text.py
 COPY backend/ingestion/postgres_repository.py /app/backend/ingestion/postgres_repository.py
+COPY backend/ingestion/recovery_equivalence.py /app/backend/ingestion/recovery_equivalence.py
+COPY backend/ingestion/vector_binary.py /app/backend/ingestion/vector_binary.py
 COPY backend/ingestion/privacy.html /app/backend/ingestion/privacy.html
 COPY backend/ingestion/query_boundary.py /app/backend/ingestion/query_boundary.py
 COPY backend/ingestion/retrieval.py /app/backend/ingestion/retrieval.py
