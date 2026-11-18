@@ -15,11 +15,10 @@ def query_evidence(query, provider: EmbeddingProvider, sdk_tool, *, expected_dim
     if not isinstance(query,str) or not query.strip() or len(query)>max_query_chars:
         raise ValueError('nonempty bounded query required')
     if not isinstance(call_id,str) or not call_id.strip():raise ValueError('call_id required')
-    try:raw=provider.embed_documents([query])
+    try:raw=provider.embed_query(query)
     except Exception as exc:raise QueryEmbeddingFailure('query embedding provider failed') from exc
     try:
-        if len(raw)!=1:raise ValueError('exactly one query vector required')
-        vector=tuple(raw[0]);_unit(vector,expected_dimension)
+        vector=tuple(raw);_unit(vector,expected_dimension)
     except (ValueError,TypeError,OverflowError,KeyError,IndexError) as exc:
         raise QueryEmbeddingResponseError('invalid query embedding response') from exc
     # Existing SDK/vector-only contract remains unchanged. No fallback/retry.
