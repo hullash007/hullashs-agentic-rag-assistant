@@ -1,3 +1,4 @@
+# D1: shipped lifecycle harness fixtures and browser globals corrected; runtime unchanged.
 # Exact composed OFF candidate qualification; no deployment.
 # Revision 3: in-page lifecycle confirmation and full server receipt; prior Revision 2: explicit final-image source COPY boundary; qualification logic unchanged.
 name: Isolated lifecycle image qualification
