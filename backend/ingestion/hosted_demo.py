@@ -12,7 +12,7 @@ from .persisted_query import PersistedQueryService
 from .upload_app import create_upload_app
 
 
-def make_hosted_demo(settings):
+def make_hosted_demo(settings, *, admission=None):
     if settings.get('ANSWER_GENERATION_ENABLED','false')!='false':
         raise ValueError('hosted preparation is retrieval-only')
     # Validate gate before touching any database or constructing expensive resources.
@@ -31,6 +31,7 @@ def make_hosted_demo(settings):
             audience=settings.get('GOOGLE_AUDIENCE','allowlist'),
             operations_enabled=settings.get('GOOGLE_OPERATIONS_ENABLED','false')=='true')
     elif mode=='basic':
+        if admission is not None:raise ValueError('execution admission requires verified Google tenant scope')
         gate=PrivateDemoGate(None,username=username,password=password,allowed_origin=origin)
     else:
         raise ValueError('explicit supported authentication mode required')
@@ -48,7 +49,7 @@ def make_hosted_demo(settings):
             connect_args={'connect_timeout':5,'options':'-c statement_timeout=5000 -c lock_timeout=2000'})
         if mode=='google':
             from .tenant_dispatch import TenantDispatcher
-            gate.app=TenantDispatcher(engine=engine,parser=parser)
+            gate.app=TenantDispatcher(engine=engine,parser=parser,admission=admission)
             return gate
         repository=PostgresDocumentRepository(engine,dimension=3,embedding_profile='synthetic-hosted-demo-v1:dimension3')
         # Deliberately no automatic DDL. Provisioning belongs to separately approved setup.
