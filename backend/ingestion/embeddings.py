@@ -7,6 +7,8 @@ from .contracts import DocumentChunk
 class EmbeddingProvider(Protocol):
     def embed_documents(self, texts: Sequence[str]) -> Sequence[Sequence[float]]: ...
 
+    def embed_query(self, query: str) -> Sequence[float]: ...
+
 
 def embed_chunks(chunks: Sequence[DocumentChunk], provider: EmbeddingProvider) -> tuple[tuple[float, ...], ...]:
     if not chunks:
