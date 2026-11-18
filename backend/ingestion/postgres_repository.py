@@ -5,11 +5,15 @@ import json
 from sqlalchemy import (MetaData, Table, Column, Text, Integer, LargeBinary,
                         ForeignKey, UniqueConstraint, JSON, select, insert, func, text)
 from sqlalchemy.exc import IntegrityError
+from sqlalchemy.sql.functions import Function
+from sqlalchemy.sql.elements import quoted_name
+from .vector_binary import VectorSendBinding, decode_vector_binary
 from pgvector.sqlalchemy import VECTOR
 from .contracts import SourceDocument, CitationRef, DocumentChunk
 from .segments import ExtractedDocument, ExtractedSegment, SegmentLocator, LocatedChunk
 from .located_search import LocatedHit
 from .retrieval import _unit
+from .recovery_equivalence import (Equivalence, RECOVERY_CHUNK_CAP, compare_recovery_rows)
 
 SERIALIZATION = 'extracted-segments-v1'
 
@@ -57,8 +61,65 @@ class DocumentQuota(ValueError):
     pass
 
 
+class DocumentCommitUnknown(RuntimeError):
+    """Body finished, but transaction exit did not acknowledge completion.
+
+    This is not proof of rollback or persistence. Never automatically retry.
+    An existing-document read-only path does not attempt a new write.
+    """
+    retry_allowed = False
+
+    def __init__(self, *, already_present=False):
+        super().__init__('document transaction outcome unconfirmed')
+        self.commit_state = 'not_attempted' if already_present else 'unknown'
+
+
+class DocumentReadbackUnavailable(RuntimeError):
+    """Normal transaction exit, but no usable result; never report upload success.
+
+    Acknowledged commit is not independent database durability qualification.
+    Readback can fail due to integrity validation, not only availability.
+    """
+    retry_allowed = False
+
+    def __init__(self, *, already_present=False):
+        super().__init__('document result unavailable after transaction')
+        self.commit_state = 'not_attempted' if already_present else 'acknowledged'
+
+
+@dataclass(frozen=True)
+class IdentityConstraintBinding:
+    """Explicit verified DB identities, never inferred conventional PG names.
+
+    None at the repository disables uniqueness recovery. This metadata gate does
+    not qualify persisted-vector equivalence or prove a database race/rollback.
+    """
+    schema: str
+    table: str
+    constraints: tuple
+
+    def __post_init__(self):
+        if (not isinstance(self.schema, str) or not self.schema.strip() or
+            self.table != 'rag_documents' or type(self.constraints) is not tuple or
+            not self.constraints or
+            any(not isinstance(c, str) or not c.strip() for c in self.constraints) or
+            len(set(self.constraints)) != len(self.constraints)):
+            raise ValueError('explicit schema/table/identity-constraint binding required')
+
+    def permits(self, error, *, stage):
+        if stage != 'document_insert' or not isinstance(error, IntegrityError):
+            return False
+        original = error.orig
+        diagnostic = getattr(original, 'diag', None)
+        return (getattr(original, 'sqlstate', None) == '23505' and
+                getattr(diagnostic, 'schema_name', None) == self.schema and
+                getattr(diagnostic, 'table_name', None) == self.table and
+                getattr(diagnostic, 'constraint_name', None) in self.constraints)
+
+
 class PostgresDocumentRepository:
-    def __init__(self, engine, *, dimension, embedding_profile, tenant_subject=None):
+    def __init__(self, engine, *, dimension, embedding_profile, tenant_subject=None,
+                 identity_constraint_binding=None, vector_send_binding=None):
         if type(dimension) is not int or not 1 <= dimension <= 16000:
             raise ValueError('explicit fixed vector dimension required')
         if not isinstance(embedding_profile, str) or not embedding_profile.strip():
@@ -67,6 +128,12 @@ class PostgresDocumentRepository:
             raise ValueError('PostgreSQL required')
         if tenant_subject is not None and (not isinstance(tenant_subject,str) or not tenant_subject or len(tenant_subject)>255):
             raise ValueError('verified tenant subject required')
+        if identity_constraint_binding is not None and not isinstance(identity_constraint_binding, IdentityConstraintBinding):
+            raise ValueError('explicit identity constraint binding required')
+        if vector_send_binding is not None and not isinstance(vector_send_binding, VectorSendBinding):
+            raise ValueError('explicit verified vector send binding required')
+        self.vector_send_binding = vector_send_binding
+        self.identity_constraint_binding = identity_constraint_binding
         self.source_prefix=('tenant-v1:'+digest(canonical(['google',tenant_subject]))+':') if tenant_subject is not None else ''
         self.engine, self.dimension = engine, dimension
         self.embedding_profile = embedding_profile
@@ -175,6 +242,8 @@ class PostgresDocumentRepository:
                                                            extraction_profile, embedding_profile)
         document_id = digest(canonical(['document-v1', document.source.source_id]))
         already = False
+        document_insert_error = None
+        body_completed = False
         try:
             with self.engine.begin() as connection:
                 if self.source_prefix:
@@ -192,12 +261,18 @@ class PostgresDocumentRepository:
                         total=connection.execute(select(func.count(),func.coalesce(func.sum(func.octet_length(self.documents.c.original_bytes)),0))).one()
                         if own[0]>=20 or own[1]+len(original_bytes)>5*1024*1024 or total[0]>=100 or total[1]+len(original_bytes)>25*1024*1024:
                             raise DocumentQuota('sample storage limit reached')
-                    connection.execute(insert(self.documents).values(document_id=document_id,
-                        source_id=document.source.source_id, source=asdict(document.source),
-                        original_bytes=original_bytes, extracted=payload,
-                        extracted_sha256=digest(canonical(payload)), serialization=SERIALIZATION,
-                        extraction_profile=extraction_profile, embedding_profile=embedding_profile,
-                        fingerprint=fingerprint, chunk_count=len(chunks)))
+                    try:
+                        connection.execute(insert(self.documents).values(document_id=document_id,
+                            source_id=document.source.source_id, source=asdict(document.source),
+                            original_bytes=original_bytes, extracted=payload,
+                            extracted_sha256=digest(canonical(payload)), serialization=SERIALIZATION,
+                            extraction_profile=extraction_profile, embedding_profile=embedding_profile,
+                            fingerprint=fingerprint, chunk_count=len(chunks)))
+                    except IntegrityError as error:
+                        # Capture only this exact statement error, not failures
+                        # in chunk/vector statements or transaction context exit.
+                        document_insert_error = error
+                        raise
                     if _checkpoint: _checkpoint('document')
                     for ordinal, (c, vector) in enumerate(zip(chunks, units)):
                         ref = c.chunk.citation
@@ -209,15 +284,84 @@ class PostgresDocumentRepository:
                         connection.execute(insert(self.embeddings).values(located_id=c.located_id,
                             vector=list(vector), profile=embedding_profile))
                         if _checkpoint: _checkpoint('vector')
+                # All body operations finished. Only context exit remains.
+                body_completed = True
         except IntegrityError as error:
-            # A concurrent identical ingestion may have committed after our lookup.
-            with self.engine.connect() as connection:
-                old = connection.execute(select(self.documents.c.fingerprint).where(
-                    self.documents.c.document_id == document_id, self._scope())).scalar_one_or_none()
-            if old != fingerprint:
-                raise DocumentConflict('conflicting concurrent ingestion') from error
-            already = True
-        return self.load_document(document_id, _already_present=already)
+            if body_completed:
+                raise DocumentCommitUnknown(already_present=already) from error
+            binding = self.identity_constraint_binding
+            # Outer context must have unwound without replacing the original
+            # insert error. Cleanup failure or commit-phase errors never recover.
+            if (error is not document_insert_error or binding is None or
+                    not binding.permits(error, stage='document_insert')):
+                raise
+            expected = dict(document_id=document_id, source_id=document.source.source_id,
+                source=asdict(document.source), original_bytes=original_bytes, extracted=payload,
+                extracted_sha256=digest(canonical(payload)), serialization=SERIALIZATION,
+                extraction_profile=extraction_profile, embedding_profile=embedding_profile,
+                fingerprint=fingerprint, chunk_count=len(chunks))
+            expected_chunks = tuple(dict(located_id=c.located_id, document_id=document_id,
+                ordinal=i, original_chunk_id=c.chunk.citation.chunk_id,
+                segment_index=c.segment_index, text=c.chunk.text,
+                start=c.chunk.citation.start, end=c.chunk.citation.end,
+                locator=asdict(c.locator)) for i,c in enumerate(chunks))
+            try:
+                rows = self._recovery_rows(document_id)
+                comparison = compare_recovery_rows(rows, expected, expected_chunks, units, self.dimension)
+            except Exception:
+                # Preserve original insert failure; no automatic retry or fallback.
+                raise error
+            if comparison is not Equivalence.EQUIVALENT:
+                # Both complete mismatch and unresolved read preserve the
+                # original identity-insert failure, never recovery success.
+                raise error
+            # All authoritative persisted fields verified in that single snapshot.
+            ordered = sorted(rows, key=lambda r: r['chunk__ordinal']) if chunks else []
+            persisted_vectors = tuple(tuple(float(x) for x in r['vector__vector']) for r in ordered)
+            return StoredDocument(document_id, document, original_bytes, expected['extracted_sha256'],
+                extraction_profile, embedding_profile, chunks, persisted_vectors, True)
+        except Exception as error:
+            if body_completed:
+                raise DocumentCommitUnknown(already_present=already) from error
+            raise
+        try:
+            result = self.load_document(document_id, _already_present=already)
+            if result is None:
+                raise ValueError('document readback returned no result')
+            return result
+        except Exception as error:
+            raise DocumentReadbackUnavailable(already_present=already) from error
+
+    def _recovery_rows(self, document_id):
+        # One statement snapshot, explicit aliases, complete children including
+        # vectorless chunks and a null child row for a zero-chunk parent.
+        binding = self.vector_send_binding
+        if binding is None:
+            return []  # Missing trusted codec is unresolved, never text fallback.
+        binary = Function(quoted_name(binding.function, True), self.embeddings.c.vector,
+            packagenames=(quoted_name(binding.schema, True),), type_=LargeBinary())
+        statement = select(
+            *(c.label('doc__'+c.name) for c in self.documents.c),
+            *(c.label('chunk__'+c.name) for c in self.chunks.c),
+            *(c.label('vector__'+c.name) for c in self.embeddings.c if c.name != 'vector'),
+            binary.label('vector__binary')
+        ).select_from(self.documents.outerjoin(self.chunks,
+            self.chunks.c.document_id == self.documents.c.document_id).outerjoin(
+            self.embeddings, self.embeddings.c.located_id == self.chunks.c.located_id)
+        ).where(self.documents.c.document_id == document_id, self._scope()).order_by(
+            self.chunks.c.ordinal).limit(RECOVERY_CHUNK_CAP+1)
+        with self.engine.connect() as connection:
+            raw_rows = connection.execute(statement).mappings().all()
+        rows = []
+        try:
+            for raw in raw_rows:
+                row = dict(raw)
+                value = row.pop('vector__binary')
+                row['vector__vector'] = None if value is None else decode_vector_binary(value, self.dimension)
+                rows.append(row)
+        except (KeyError, TypeError, ValueError):
+            return []
+        return rows
 
     @staticmethod
     def _located(row, source):
